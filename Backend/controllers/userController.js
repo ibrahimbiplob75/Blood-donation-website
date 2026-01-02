@@ -1,0 +1,546 @@
+const bcrypt = require('bcryptjs');
+const { ObjectId } = require('mongodb');
+const { getCollections } = require('../config/database');
+
+
+const getUsers = async (req, res) => {
+  try {
+    const { usersCollection } = getCollections();
+    const { email } = req.query;
+
+    let query = {};
+    if (email) {
+      query.email = email.trim().toLowerCase();
+    }
+
+    const users = await usersCollection
+      .find(query, { projection: { password: 0 } })
+      .sort({ _id: -1 })
+      .toArray();
+
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ 
+      message: 'Failed to fetch users',
+      error: error.message 
+    });
+  }
+};
+
+
+const createUser = async (req, res) => {
+  try {
+    const { name, phone,lastDonateDate, email, bloodGroup, district, password } = req.body;
+    
+    const { usersCollection } = getCollections();
+    const existingUser = await usersCollection.findOne({
+      email: email.trim().toLowerCase()
+    });
+    
+    if (existingUser) {
+      return res.status(409).json({ message: 'Email already exists' });
+    }
+    let hashedPassword = '';
+    if (password && typeof password === 'string' && password.trim() !== '') {
+      const saltRounds = 12;
+      hashedPassword = await bcrypt.hash(password, saltRounds);
+    }
+
+
+    const newUser = {
+      Name: name ? name.trim() : '',
+      phone: phone || '',
+      lastDonateDate: lastDonateDate || '',
+      email: email ? email.trim().toLowerCase() : '',
+      role: 'user',
+      bloodTaken: 0,
+      bloodGiven: 0,
+      bloodGroup: bloodGroup || '',
+      district: district || '',
+      password: hashedPassword,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    const result = await usersCollection.insertOne(newUser);
+    
+    const createdUser = await usersCollection.findOne(
+      { _id: result.insertedId },
+      { projection: { password: 0 } }
+    );
+    
+    res.status(201).json({ 
+      message: 'User created successfully',
+      user: createdUser
+    });
+  } catch (error) {
+    console.error('Create user error:', error);
+    res.status(500).json({ 
+      message: 'Failed to create user',
+      error: error.message 
+    });
+  }
+};
+
+
+const updateUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('Updating user with ID:', id);
+    const { name, phone, lastDonateDate, email, role, bloodGroup, district, bloodGiven, bloodTaken, password } = req.body;
+    
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid user ID format' });
+    }
+
+    const { usersCollection } = getCollections();
+    
+    const existingUser = await usersCollection.findOne({ _id: new ObjectId(id) });
+    if (!existingUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+  
+    const duplicateUser = await usersCollection.findOne({ 
+      email: email.trim().toLowerCase(), 
+      _id: { $ne: new ObjectId(id) } 
+    });
+    if (duplicateUser) {
+      return res.status(409).json({ message: 'Email already exists' });
+    }
+    
+    const updateData = {
+      Name: name ? name.trim() : existingUser.Name,
+      phone: phone || existingUser.phone,
+      lastDonateDate: lastDonateDate || existingUser.lastDonateDate,
+      email: email ? email.trim().toLowerCase() : existingUser.email,
+      bloodGroup: bloodGroup || existingUser.bloodGroup,
+      district: district || existingUser.district,
+      bloodGiven: bloodGiven !== undefined ? parseInt(bloodGiven) || 0 : existingUser.bloodGiven || 0,
+      bloodTaken: bloodTaken !== undefined ? parseInt(bloodTaken) || 0 : existingUser.bloodTaken || 0,
+      updatedAt: new Date()
+    };
+    if (role) {
+      updateData.role = role;
+    }
+    if (password && password.trim()) {
+      const saltRounds = 12;
+      updateData.password = await bcrypt.hash(password, saltRounds);
+    }
+    
+    await usersCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    );
+    
+    const updatedUser = await usersCollection.findOne(
+      { _id: new ObjectId(id) },
+      { projection: { password: 0 } }
+    );
+    
+    res.status(200).json({ 
+      message: 'User updated successfully',
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error('Update user error:', error);
+    res.status(500).json({ 
+      message: 'Failed to update user',
+      error: error.message 
+    });
+  }
+};
+
+const admin = require('../config/firebase.admin'); 
+
+const deleteFirebaseUser = async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    try {
+      const userRecord = await admin.auth().getUserByEmail(email);
+      await admin.auth().deleteUser(userRecord.uid);
+    } catch (firebaseError) {
+      // User might not exist in Firebase (uploaded via Excel)
+      console.log('Firebase user not found:', email);
+    }
+    
+    res.status(200).json({ 
+      message: 'User deletion processed' 
+    });
+  } catch (error) {
+    console.error('Firebase deletion error:', error);
+    res.status(500).json({ 
+      message: 'Failed to delete Firebase user',
+      error: error.message 
+    });
+  }
+};
+
+const deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid user ID format' });
+    }
+
+    const { usersCollection } = getCollections();
+    const result = await usersCollection.deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    res.status(200).json({ 
+      message: 'User deleted successfully',
+      id: id 
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      message: 'Failed to delete user',
+      error: error.message 
+    });
+  }
+};
+
+
+
+// Get user profile with statistics
+const getUserProfile = async (req, res) => {
+  try {
+    const { usersCollection, bloodTransactionsCollection, bloodRequestsCollection } = getCollections();
+    const { email } = req.query;
+    
+    if (!email) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    // Get user details
+    const user = await usersCollection.findOne(
+      { email: email.trim().toLowerCase() },
+      { projection: { password: 0 } }
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    const donationHistory = await bloodTransactionsCollection
+      .find({
+        type: 'entry',
+        $or: [
+          { donorEmail: email.trim().toLowerCase() },
+          { donorPhone: user.phone }
+        ]
+      })
+      .sort({ donatedAt: -1 })
+      .toArray();
+
+    // Get blood request history (requests created by user)
+    const requestHistory = await bloodRequestsCollection
+      .find({ requesterEmail: email.trim().toLowerCase() })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    // Calculate statistics
+    const totalDonations = donationHistory.length;
+    const totalUnitsGiven = donationHistory.reduce((sum, d) => sum + (d.units || 0), 0);
+    const lastDonation = donationHistory[0];
+    const lastDonationDate = lastDonation ? lastDonation.donatedAt : user.lastDonateDate;
+
+    const totalRequests = requestHistory.length;
+    const pendingRequests = requestHistory.filter(r => r.status === 'pending').length;
+    const fulfilledRequests = requestHistory.filter(r => r.status === 'fulfilled').length;
+    const cancelledRequests = requestHistory.filter(r => r.status === 'cancelled').length;
+
+    // Check eligibility for next donation (3 months gap)
+    let nextEligibleDate = null;
+    let canDonateNow = true;
+    
+    if (lastDonationDate) {
+      const lastDate = new Date(lastDonationDate);
+      nextEligibleDate = new Date(lastDate);
+      nextEligibleDate.setMonth(nextEligibleDate.getMonth() + 3);
+      canDonateNow = new Date() >= nextEligibleDate;
+    }
+
+    res.json({
+      success: true,
+      profile: {
+        _id: user._id,
+        name: user.Name,
+        email: user.email,
+        phone: user.phone,
+        bloodGroup: user.bloodGroup,
+        district: user.district,
+        role: user.role,
+        createdAt: user.createdAt,
+        lastDonateDate: lastDonationDate,
+        bloodGiven: user.bloodGiven || 0,
+        bloodTaken: user.bloodTaken || 0
+      },
+      statistics: {
+        donations: {
+          total: totalDonations,
+          totalUnits: totalUnitsGiven,
+          lastDate: lastDonationDate,
+          nextEligibleDate,
+          canDonateNow
+        },
+        requests: {
+          total: totalRequests,
+          pending: pendingRequests,
+          fulfilled: fulfilledRequests,
+          cancelled: cancelledRequests
+        }
+      },
+      donationHistory: donationHistory.map(d => ({
+        id: d._id,
+        bloodGroup: d.bloodGroup,
+        units: d.units,
+        date: d.donatedAt,
+        collectedBy: d.collectedBy,
+        notes: d.notes
+      })),
+      requestHistory: requestHistory.map(r => ({
+        id: r._id,
+        bloodGroup: r.bloodGroup,
+        units: r.unitsNeeded || 1,
+        status: r.status,
+        hospitalName: r.hospitalName,
+        district: r.district,
+        urgency: r.urgency,
+        createdAt: r.createdAt,
+        fulfilledAt: r.fulfilledAt
+      }))
+    });
+
+  } catch (error) {
+    console.error('Get user profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch user profile',
+      error: error.message
+    });
+  }
+};
+
+// Update user profile (no auth required; id or email must be provided)
+const updateUserProfile = async (req, res) => {
+  try {
+    const { usersCollection } = getCollections();
+    
+    // Accept identifier via id (preferred) or email via query/body
+    const idRaw = req.query?.id || req.body?.id || '';
+    const userId = String(idRaw).trim();
+    const userEmailRaw = req.query?.email || req.body?.email || '';
+    const userEmail = String(userEmailRaw).trim().toLowerCase();
+    
+    console.log('Update profile request - ID:', userId, 'Email:', userEmail);
+    
+    if (!userId && !userEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'User identifier required (id or email)'
+      });
+    }
+
+    const { name, phone, district, bloodGroup, lastDonateDate } = req.body;
+    
+    console.log('Update data received:', { name, phone, district, bloodGroup, lastDonateDate });
+    
+    const updateData = {
+      updatedAt: new Date()
+    };
+    
+    if (name) updateData.Name = name;
+    if (phone) updateData.phone = phone;
+    if (district) updateData.district = district;
+    if (bloodGroup) updateData.bloodGroup = bloodGroup;
+    if (lastDonateDate !== undefined) updateData.lastDonateDate = lastDonateDate;
+
+    // Build filter: prefer _id when valid, else email
+    let filter = null;
+    if (userId && ObjectId.isValid(userId)) {
+      filter = { _id: new ObjectId(userId) };
+      console.log('Using ID filter:', filter);
+    } else if (userEmail) {
+      filter = { email: userEmail };
+      console.log('Using email filter:', filter);
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid user identifier required'
+      });
+    }
+
+    // First check if user exists
+    const existingUser = await usersCollection.findOne(filter);
+    console.log('Existing user found:', existingUser ? 'Yes' : 'No');
+    
+    if (!existingUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Now update the user
+    const result = await usersCollection.findOneAndUpdate(
+      filter,
+      { $set: updateData },
+      { returnDocument: 'after', projection: { password: 0 } }
+    );
+
+    console.log('Update result:', result ? 'Success' : 'Failed');
+
+    // Handle both old and new MongoDB driver versions
+    const updatedUser = result.value || result;
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'Failed to update user'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: updatedUser
+    });
+
+  } catch (error) {
+    console.error('Update user profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update profile',
+      error: error.message
+    });
+  }
+};
+
+// Get donation history only
+const getDonationHistory = async (req, res) => {
+  try {
+    const { bloodTransactionsCollection, usersCollection } = getCollections();
+    const { email } = req.query;
+    const userEmail = email.trim().toLowerCase();
+    
+    if (!userEmail) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    const user = await usersCollection.findOne({ email: userEmail });
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const donations = await bloodTransactionsCollection
+      .find({
+        type: 'entry',
+        $or: [
+          { donorEmail: userEmail },
+          { donorPhone: user.phone }
+        ]
+      })
+      .sort({ donatedAt: -1 })
+      .toArray();
+
+    res.json({
+      success: true,
+      donations: donations.map(d => ({
+        id: d._id,
+        bloodGroup: d.bloodGroup,
+        units: d.units,
+        date: d.donatedAt,
+        collectedBy: d.collectedBy,
+        notes: d.notes,
+        donorAddress: d.donorAddress
+      }))
+    });
+
+  } catch (error) {
+    console.error('Get donation history error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch donation history',
+      error: error.message
+    });
+  }
+};
+
+// Get request history only
+const getRequestHistory = async (req, res) => {
+  try {
+    const { bloodRequestsCollection } = getCollections();
+    const { email } = req.query;
+    const userEmail = email.trim().toLowerCase();
+    
+    if (!userEmail) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    const requests = await bloodRequestsCollection
+      .find({ requesterEmail: userEmail })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.json({
+      success: true,
+      requests: requests.map(r => ({
+        id: r._id,
+        bloodGroup: r.bloodGroup,
+        units: r.unitsNeeded || 1,
+        status: r.status,
+        hospitalName: r.hospitalName,
+        district: r.district,
+        urgency: r.urgency,
+        patientName: r.patientName,
+        createdAt: r.createdAt,
+        fulfilledAt: r.fulfilledAt,
+        cancelledAt: r.cancelledAt
+      }))
+    });
+
+  } catch (error) {
+    console.error('Get request history error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch request history',
+      error: error.message
+    });
+  }
+};
+
+
+module.exports = {
+  getUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+  deleteFirebaseUser,
+  getUserProfile,
+  updateUserProfile,
+  getDonationHistory,
+  getRequestHistory
+};

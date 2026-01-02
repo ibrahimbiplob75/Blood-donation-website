@@ -1,0 +1,9 @@
+{
+  "routes": [
+    {
+      "path": "/*",
+      "method": "GET",
+      "serve": "/index.html"
+    }
+  ]
+}
