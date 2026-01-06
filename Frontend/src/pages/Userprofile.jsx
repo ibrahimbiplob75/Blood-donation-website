@@ -38,6 +38,7 @@ const UserProfile = () => {
     email: "",
     district: "",
     bloodGroup: "",
+    lastDonateDate: "",
   });
 
   const bloodGroups = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
@@ -141,6 +142,7 @@ const UserProfile = () => {
           email: data.profile.email,
           district: data.profile.district,
           bloodGroup: data.profile.bloodGroup,
+          lastDonateDate: data.profile.lastDonateDate || "",
         });
       } else {
         Swal.fire({
@@ -168,6 +170,7 @@ const UserProfile = () => {
       email: profile.email,
       district: profile.district,
       bloodGroup: profile.bloodGroup,
+      lastDonateDate: profile.lastDonateDate || "",
     });
   };
 
@@ -185,6 +188,7 @@ const UserProfile = () => {
           phone: editForm.phone,
           district: editForm.district,
           bloodGroup: editForm.bloodGroup,
+          lastDonateDate: editForm.lastDonateDate,
         }),
       });
 
@@ -440,9 +444,26 @@ const UserProfile = () => {
             <Calendar className="text-red-600" size={24} />
             <div className="flex-1">
               <p className="text-sm text-gray-500">Last Donated Blood</p>
-              <p className="text-lg font-semibold">
-                {formatDate(profile.lastDonateDate)}
-              </p>
+              {isEditing ? (
+                <div className="mt-1">
+                  <input
+                    type="date"
+                    value={editForm.lastDonateDate ? new Date(editForm.lastDonateDate).toISOString().split('T')[0] : ''}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, lastDonateDate: e.target.value })
+                    }
+                    className="input input-bordered input-sm w-full"
+                    max={new Date().toISOString().split('T')[0]}
+                  />
+                  {!editForm.lastDonateDate && (
+                    <p className="text-xs text-gray-500 mt-1">Select your last donation date</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-lg font-semibold">
+                  {formatDate(profile.lastDonateDate)}
+                </p>
+              )}
             </div>
           </div>
         </div>

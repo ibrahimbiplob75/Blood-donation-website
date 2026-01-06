@@ -22,7 +22,6 @@ function setupMiddleware(app) {
   const corsOptions = {
     origin: [
       'https://blood-management-rmc.web.app',
-      'https://rupdhara-bd.web.app',
       'http://localhost:5173',
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

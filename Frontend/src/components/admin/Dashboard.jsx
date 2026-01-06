@@ -9,6 +9,7 @@ import {
   Activity,
   FileText,
   Settings,
+  Clock,
 } from "lucide-react";
 
 import useAxios from "../../Hooks/useAxios.js";
@@ -245,6 +246,18 @@ const Dashboard = () => {
                   <Activity size={20} /> Donation History
                 </Link>
               </li>
+              <li>
+                <Link
+                  to="/admin/approvals"
+                  className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
+                    isActive("/admin/approvals")
+                      ? "bg-red-600 text-white shadow-xl shadow-red-600/50 scale-105 font-semibold"
+                      : "hover:bg-red-50 hover:shadow-md text-gray-700"
+                  }`}
+                >
+                  <Clock size={20} /> Pending Approvals
+                </Link>
+              </li>
 
               {/* <li>
                 <Link
@@ -285,6 +298,13 @@ const Dashboard = () => {
                 </Link>
               </li>
 
+              
+
+              
+
+              <p className="text-xs text-gray-500 uppercase font-bold tracking-wide mt-6 mb-2 px-2">
+                Settings
+              </p>
               <li>
                 <Link
                   to="/admin/statistics"
@@ -297,10 +317,6 @@ const Dashboard = () => {
                   <Activity size={20} /> Statistics
                 </Link>
               </li>
-
-              <p className="text-xs text-gray-500 uppercase font-bold tracking-wide mt-6 mb-2 px-2">
-                Settings
-              </p>
 
               <li>
                 <Link

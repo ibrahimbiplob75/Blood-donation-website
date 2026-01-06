@@ -27,6 +27,7 @@ async function connectToDatabase() {
     collections.usersCollection = db.collection("users");
     collections.adminCollection = db.collection("admins");
     collections.bloodRequestsCollection = db.collection('bloodRequests');
+    collections.donationRequestsCollection = db.collection('donationRequests');
     collections.bloodStockCollection = db.collection('bloodStock');
     collections.bloodTransactionsCollection = db.collection('bloodTransactions');
     collections.statisticsCollection = db.collection('statistics');

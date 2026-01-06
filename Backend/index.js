@@ -10,6 +10,7 @@ const userRoutes = require('./routes/user');
 const authRoutes = require('./routes/Authroutes');
 const bloodRequestRoutes = require('./routes/Bloodrequest');
 const bloodStockRoutes = require('./routes/bloodStockRoutes');
+const donationRequestRoutes = require('./routes/donationRequest');
 
 const { loginAdmin, verifyAdminToken } = require('./services/authService');
 const { generateToken } = require('./middleware/auth');
@@ -73,6 +74,7 @@ app.use('/', adminRoutes);
 app.use('/', userRoutes);
 app.use('/', bloodRequestRoutes);
 app.use('/', bloodStockRoutes);
+app.use('/', donationRequestRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Global error handler:', err);

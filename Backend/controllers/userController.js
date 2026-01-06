@@ -6,11 +6,20 @@ const { getCollections } = require('../config/database');
 const getUsers = async (req, res) => {
   try {
     const { usersCollection } = getCollections();
-    const { email } = req.query;
+    const { email, approvedOnly } = req.query;
 
     let query = {};
     if (email) {
       query.email = email.trim().toLowerCase();
+    }
+    
+    // Only show approved donors to public
+    if (approvedOnly === 'true') {
+      query.$or = [
+        { donorApprovalStatus: 'approved' },
+        { donorApprovalStatus: { $exists: false } }, // Legacy users without approval status
+        { role: { $ne: 'donor' } } // Non-donor users
+      ];
     }
 
     const users = await usersCollection
@@ -58,6 +67,7 @@ const createUser = async (req, res) => {
       bloodGroup: bloodGroup || '',
       district: district || '',
       password: hashedPassword,
+      donorApprovalStatus: 'pending', // New donors need admin approval
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -533,6 +543,130 @@ const getRequestHistory = async (req, res) => {
 };
 
 
+const getPendingDonors = async (req, res) => {
+  try {
+    const { usersCollection } = getCollections();
+
+    const pendingDonors = await usersCollection
+      .find({ 
+        donorApprovalStatus: 'pending',
+        role: 'user'
+      }, { projection: { password: 0 } })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.status(200).json({
+      success: true,
+      count: pendingDonors.length,
+      donors: pendingDonors
+    });
+  } catch (error) {
+    console.error('Get pending donors error:', error);
+    res.status(500).json({
+      message: 'Failed to fetch pending donors',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Approve donor registration (Admin only)
+ */
+const approveDonor = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminId, adminEmail } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid donor ID' });
+    }
+
+    const { usersCollection } = getCollections();
+
+    const result = await usersCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { 
+        $set: { 
+          donorApprovalStatus: 'approved',
+          approvedBy: adminId || adminEmail,
+          approvedAt: new Date(),
+          updatedAt: new Date()
+        } 
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: 'Donor not found' });
+    }
+
+    const updatedDonor = await usersCollection.findOne(
+      { _id: new ObjectId(id) },
+      { projection: { password: 0 } }
+    );
+
+    res.status(200).json({
+      message: 'Donor approved successfully',
+      donor: updatedDonor
+    });
+  } catch (error) {
+    console.error('Approve donor error:', error);
+    res.status(500).json({
+      message: 'Failed to approve donor',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Reject donor registration (Admin only)
+ */
+const rejectDonor = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason, adminId, adminEmail } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid donor ID' });
+    }
+
+    const { usersCollection } = getCollections();
+
+    const result = await usersCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { 
+        $set: { 
+          donorApprovalStatus: 'rejected',
+          rejectionReason: reason || '',
+          rejectedBy: adminId || adminEmail,
+          rejectedAt: new Date(),
+          updatedAt: new Date()
+        } 
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: 'Donor not found' });
+    }
+
+    const updatedDonor = await usersCollection.findOne(
+      { _id: new ObjectId(id) },
+      { projection: { password: 0 } }
+    );
+
+    res.status(200).json({
+      message: 'Donor registration rejected',
+      donor: updatedDonor
+    });
+  } catch (error) {
+    console.error('Reject donor error:', error);
+    res.status(500).json({
+      message: 'Failed to reject donor',
+      error: error.message
+    });
+  }
+};
+
+
 module.exports = {
   getUsers,
   createUser,
@@ -542,5 +676,8 @@ module.exports = {
   getUserProfile,
   updateUserProfile,
   getDonationHistory,
-  getRequestHistory
+  getRequestHistory,
+  getPendingDonors,
+  approveDonor,
+  rejectDonor
 };

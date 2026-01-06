@@ -75,6 +75,7 @@ const Login = () => {
           }
 
           const userRole = response.data.user?.role;
+          console.log("Logged in user role:", userRole);
 
           // Update context state immediately after login
           await checkAdminSession();

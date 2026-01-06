@@ -10,7 +10,10 @@ const {
   getUserProfile,
   updateUserProfile,
   getDonationHistory,
-  getRequestHistory
+  getRequestHistory,
+  getPendingDonors,
+  approveDonor,
+  rejectDonor
 } = require('../controllers/userController');
 const { verifyToken } = require('../middleware/auth');
 
@@ -25,5 +28,10 @@ router.get('/users', getUsers);
 router.put('/users/:id',verifyAdmin, updateUser);
 router.delete('/users/:id', verifyAdmin, deleteUser);
 router.post('/delete-firebase-user', verifyAdmin, deleteFirebaseUser);
+
+// Donor approval routes (admin only)
+router.get('/users/admin/pending-donors', verifyAdmin, getPendingDonors);
+router.put('/users/:id/approve-donor', verifyAdmin, approveDonor);
+router.put('/users/:id/reject-donor', verifyAdmin, rejectDonor);
 
 module.exports = router;

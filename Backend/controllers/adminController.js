@@ -399,11 +399,13 @@ const getDonorHistory = async (req, res) => {
         Name: 1, 
         phone: 1, 
         bloodGroup: 1, 
-        lastDonationDate: 1,
+        lastDonateDate: 1,
         available: 1,
-        district: 1
+        district: 1,
+        bloodGiven: 1,
+        bloodTaken: 1
       })
-      .sort({ lastDonationDate: -1 })
+      .sort({ lastDonateDate: -1 })
       .toArray();
 
     const today = new Date();
@@ -412,8 +414,11 @@ const getDonorHistory = async (req, res) => {
       let isAvailable = true;
       let nextAvailableDate = null;
       
-      if (donor.lastDonationDate) {
-        const lastDate = new Date(donor.lastDonationDate);
+      // Use lastDonateDate (the actual field name in database)
+      const lastDonationDate = donor.lastDonateDate;
+      
+      if (lastDonationDate) {
+        const lastDate = new Date(lastDonationDate);
         const fourMonthsLater = new Date(lastDate);
         fourMonthsLater.setMonth(fourMonthsLater.getMonth() + 4);
         
@@ -423,8 +428,11 @@ const getDonorHistory = async (req, res) => {
       
       return {
         ...donor,
+        lastDonationDate: lastDonationDate, // Add this field for frontend compatibility
         isAvailable,
-        nextAvailableDate: nextAvailableDate ? nextAvailableDate.toISOString() : null
+        nextAvailableDate: nextAvailableDate ? nextAvailableDate.toISOString() : null,
+        bloodGiven: donor.bloodGiven || 0,
+        bloodTaken: donor.bloodTaken || 0
       };
     });
 

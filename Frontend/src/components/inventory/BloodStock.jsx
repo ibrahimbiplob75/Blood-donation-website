@@ -30,7 +30,7 @@ const BloodStock = () => {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 50;
 
   // Filters
   const [filters, setFilters] = useState({
@@ -108,6 +108,13 @@ const BloodStock = () => {
 
   const applyFilters = () => {
     let filtered = [...transactions];
+
+    // Sort by most recent first
+    filtered.sort((a, b) => {
+      const dateA = new Date(a.donatedAt || a.createdAt || 0);
+      const dateB = new Date(b.donatedAt || b.createdAt || 0);
+      return dateB - dateA; // Descending order (newest first)
+    });
 
     // Type filter
     if (filters.type !== "all") {

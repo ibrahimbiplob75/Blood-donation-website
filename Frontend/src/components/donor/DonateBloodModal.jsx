@@ -126,7 +126,7 @@ const DonateBloodModal = ({ isOpen, onClose }) => {
     setLoading(true);
 
     try {
-      const response = await fetch(`${baseURL}/admin/blood-entry`, {
+      const response = await fetch(`${baseURL}/donation-requests`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -156,23 +156,24 @@ const DonateBloodModal = ({ isOpen, onClose }) => {
         onClose();
         Swal.fire({
           icon: "success",
-          title: "Donor Registration Successful!",
+          title: "Donation Request Submitted!",
           html: `
-            <p>Thank you for registering as a blood donor!</p>
+            <p>Thank you for your willingness to donate blood!</p>
             <p><strong>Blood Group:</strong> ${data.bloodGroup}</p>
-            <p>Your information has been added to our blood bank.</p>
+            <p>Your donation request is pending admin approval.</p>
+            <p class="text-sm text-gray-600 mt-2">You will be notified once approved.</p>
           `,
           confirmButtonText: "OK",
         });
       } else {
         Swal.fire({
           icon: "error",
-          title: "Registration Failed",
-          text: responseData.message || "Failed to register donor",
+          title: "Submission Failed",
+          text: responseData.message || "Failed to submit donation request",
         });
       }
     } catch (error) {
-      console.error("Donor registration error:", error);
+      console.error("Donation request error:", error);
       Swal.fire({
         icon: "error",
         title: "Error",

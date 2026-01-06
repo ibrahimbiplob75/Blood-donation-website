@@ -38,10 +38,13 @@ const createBloodRequest = async (req, res) => {
       requesterName: requesterName ? requesterName.trim() : '',
       requesterEmail: requesterEmail ? requesterEmail.trim().toLowerCase() : '',
       status: 'pending', // pending, fulfilled, cancelled
+      approvalStatus: 'pending', // pending, approved, rejected - for admin approval
       createdAt: new Date(),
       updatedAt: new Date(),
       fulfilledAt: null,
       fulfilledBy: null,
+      approvedBy: null,
+      approvedAt: null,
     };
 
     const result = await bloodRequestsCollection.insertOne(newRequest);
@@ -68,12 +71,18 @@ const createBloodRequest = async (req, res) => {
  */
 const getBloodRequests = async (req, res) => {
   try {
-    const { bloodGroup, district, status, urgency } = req.query;
+    const { bloodGroup, district, status, urgency, includeUnapproved } = req.query;
     
     const { bloodRequestsCollection } = getCollections();
 
     // Build query
     let query = {};
+    
+    // Only show approved requests to public unless explicitly requested otherwise
+    if (includeUnapproved !== 'true') {
+      query.approvalStatus = 'approved';
+    }
+    
     if (bloodGroup) query.bloodGroup = bloodGroup;
     if (district) query.district = district;
     if (status) query.status = status;
@@ -314,6 +323,231 @@ const getBloodRequestStats = async (req, res) => {
   }
 };
 
+/**
+ * Get pending blood requests for admin approval
+ */
+const getPendingBloodRequests = async (req, res) => {
+  try {
+    const { bloodRequestsCollection } = getCollections();
+
+    const pendingRequests = await bloodRequestsCollection
+      .find({ approvalStatus: 'pending' })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.status(200).json({
+      success: true,
+      count: pendingRequests.length,
+      requests: pendingRequests
+    });
+  } catch (error) {
+    console.error('Get pending blood requests error:', error);
+    res.status(500).json({
+      message: 'Failed to fetch pending blood requests',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Approve blood request (Admin only)
+ */
+const approveBloodRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminId, adminEmail } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid request ID' });
+    }
+
+    const { bloodRequestsCollection } = getCollections();
+
+    const result = await bloodRequestsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { 
+        $set: { 
+          approvalStatus: 'approved',
+          approvedBy: adminId || adminEmail,
+          approvedAt: new Date(),
+          updatedAt: new Date()
+        } 
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: 'Blood request not found' });
+    }
+
+    const updatedRequest = await bloodRequestsCollection.findOne({
+      _id: new ObjectId(id)
+    });
+
+    res.status(200).json({
+      message: 'Blood request approved successfully',
+      request: updatedRequest
+    });
+  } catch (error) {
+    console.error('Approve blood request error:', error);
+    res.status(500).json({
+      message: 'Failed to approve blood request',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Reject blood request (Admin only)
+ */
+const rejectBloodRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason, adminId, adminEmail } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid request ID' });
+    }
+
+    const { bloodRequestsCollection } = getCollections();
+
+    const result = await bloodRequestsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { 
+        $set: { 
+          approvalStatus: 'rejected',
+          rejectionReason: reason || '',
+          rejectedBy: adminId || adminEmail,
+          rejectedAt: new Date(),
+          updatedAt: new Date()
+        } 
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: 'Blood request not found' });
+    }
+
+    const updatedRequest = await bloodRequestsCollection.findOne({
+      _id: new ObjectId(id)
+    });
+
+    res.status(200).json({
+      message: 'Blood request rejected',
+      request: updatedRequest
+    });
+  } catch (error) {
+    console.error('Reject blood request error:', error);
+    res.status(500).json({
+      message: 'Failed to reject blood request',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Donate from blood bank stock to fulfill request (Admin only)
+ */
+const donateFromBloodBank = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { units, adminEmail, adminName } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid request ID' });
+    }
+
+    if (!units || units <= 0) {
+      return res.status(400).json({ message: 'Valid units required' });
+    }
+
+    const { bloodRequestsCollection, bloodStockCollection, bloodTransactionsCollection } = getCollections();
+
+    // Get the blood request
+    const request = await bloodRequestsCollection.findOne({ _id: new ObjectId(id) });
+    
+    if (!request) {
+      return res.status(404).json({ message: 'Blood request not found' });
+    }
+
+    if (request.status !== 'pending') {
+      return res.status(400).json({ message: 'Request is not pending' });
+    }
+
+    // Check stock availability
+    const stockDoc = await bloodStockCollection.findOne({ bloodGroup: request.bloodGroup });
+    const currentStock = stockDoc ? stockDoc.units : 0;
+
+    if (currentStock < units) {
+      return res.status(400).json({ 
+        message: `Insufficient stock. Only ${currentStock} unit(s) available`,
+        availableUnits: currentStock
+      });
+    }
+
+    // Update stock
+    await bloodStockCollection.updateOne(
+      { bloodGroup: request.bloodGroup },
+      { 
+        $inc: { units: -parseInt(units) },
+        $set: { 
+          lastUpdated: new Date(),
+          updatedBy: adminEmail || 'admin'
+        }
+      }
+    );
+
+    // Record transaction
+    await bloodTransactionsCollection.insertOne({
+      type: 'donation',
+      bloodGroup: request.bloodGroup,
+      units: parseInt(units),
+      receiverName: request.requesterName,
+      receiverPhone: request.contactNumber,
+      hospitalName: request.hospitalName,
+      requestId: request._id.toString(),
+      donatedAt: new Date(),
+      donatedBy: 'Blood Bank',
+      processedBy: adminEmail || adminName || 'admin',
+      previousStock: currentStock,
+      newStock: currentStock - parseInt(units),
+      status: 'completed',
+      notes: `Blood bank donation for request: ${request.reason}`
+    });
+
+    // Update blood request status
+    await bloodRequestsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { 
+        $set: { 
+          status: 'fulfilled',
+          fulfilledBy: 'Blood Bank',
+          fulfilledAt: new Date(),
+          donorName: 'Blood Bank Stock',
+          donorPhone: 'N/A',
+          unitsProvided: parseInt(units),
+          updatedAt: new Date()
+        } 
+      }
+    );
+
+    const updatedRequest = await bloodRequestsCollection.findOne({
+      _id: new ObjectId(id)
+    });
+
+    res.status(200).json({
+      message: 'Blood donated from blood bank successfully',
+      request: updatedRequest,
+      unitsRemaining: currentStock - parseInt(units)
+    });
+  } catch (error) {
+    console.error('Donate from blood bank error:', error);
+    res.status(500).json({
+      message: 'Failed to donate from blood bank',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createBloodRequest,
   getBloodRequests,
@@ -321,5 +555,9 @@ module.exports = {
   updateBloodRequestStatus,
   deleteBloodRequest,
   getMyBloodRequests,
-  getBloodRequestStats
+  getBloodRequestStats,
+  getPendingBloodRequests,
+  approveBloodRequest,
+  rejectBloodRequest,
+  donateFromBloodBank
 };
