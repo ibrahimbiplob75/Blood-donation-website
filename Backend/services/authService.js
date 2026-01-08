@@ -185,6 +185,40 @@ const getCSRFToken = (req, res) => {
 };
 
 /**
+ * Verify Authenticated User Middleware
+ * Requires valid token but user doesn't need to be admin
+ */
+const verifyAuthenticated = async (req, res, next) => {
+  try {
+    let token = null;
+    if (req && req.cookies && req.cookies.token) token = req.cookies.token;
+    if (req && req.cookies && req.cookies.adminToken) token = req.cookies.adminToken;
+    if (!token && req.headers && req.headers.authorization) {
+      const parts = req.headers.authorization.split(' ');
+      if (parts.length === 2 && parts[0] === 'Bearer') token = parts[1];
+    }
+    if (!token && req.query && req.query.token) token = req.query.token;
+
+    if (!token) {
+      console.warn('verifyAuthenticated: no token provided');
+      return res.status(403).json({ error: 'Access denied - no token' });
+    }
+
+    const decoded = verifyToken(token);
+    if (decoded) {
+      req.user = decoded;
+      return next();
+    }
+
+    console.warn('verifyAuthenticated: token invalid');
+    return res.status(403).json({ error: 'Access denied - invalid token' });
+  } catch (err) {
+    console.error('verifyAuthenticated error:', err);
+    return res.status(500).json({ error: 'Authentication error' });
+  }
+};
+
+/**
  * Verify Admin Middleware
  */
 const verifyAdmin = async (req, res, next) => {
@@ -224,5 +258,6 @@ module.exports = {
   logoutAdmin,
   verifyAdminToken,
   getCSRFToken,
+  verifyAuthenticated,
   verifyAdmin
 };

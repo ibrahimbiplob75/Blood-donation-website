@@ -77,8 +77,11 @@ const Login = () => {
           const userRole = response.data.user?.role;
           console.log("Logged in user role:", userRole);
 
-          // Update context state immediately after login
+          // Update context state immediately after login and wait for it
           await checkAdminSession();
+          
+          // Add a small delay to ensure auth context is fully updated
+          await new Promise(resolve => setTimeout(resolve, 500));
 
           Swal.fire({
             position: "top-end",
@@ -91,7 +94,7 @@ const Login = () => {
           });
 
           // Redirect based on role
-          if (userRole === "Admin") {
+          if (userRole === "Admin" || userRole === "admin") {
             navigate("/admin");
           } else {
             navigate("/");

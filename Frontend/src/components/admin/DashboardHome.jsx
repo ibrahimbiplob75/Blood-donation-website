@@ -242,7 +242,7 @@ export default function DashboardHome() {
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
           <Users className="text-red-600" />
-          Donor Overview
+          User Overview
         </h2>
         <div className="flex flex-wrap gap-4 justify-center">
           <StatCard

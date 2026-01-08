@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { verifyAdmin } = require('../services/authService');
+const { verifyAdmin, verifyAuthenticated } = require('../services/authService');
 const {
   createBloodRequest,
   getBloodRequests,
@@ -12,7 +12,8 @@ const {
   getPendingBloodRequests,
   approveBloodRequest,
   rejectBloodRequest,
-  donateFromBloodBank
+  donateFromBloodBank,
+  donateToBloodRequest
 } = require('../controllers/BloodRequestController');
 
 router.post('/blood-requests', createBloodRequest);
@@ -20,6 +21,9 @@ router.get('/blood-requests', getBloodRequests);
 router.get('/blood-requests/my-requests', getMyBloodRequests);
 router.get('/blood-requests/stats', getBloodRequestStats);
 router.get('/blood-requests/:id', getBloodRequestById);
+
+// User donation endpoint - requires authentication but not admin
+router.put('/blood-requests/:id/donate', verifyAuthenticated, donateToBloodRequest);
 
 // Protected routes (admin only)
 router.get('/blood-requests/admin/pending', verifyAdmin, getPendingBloodRequests);

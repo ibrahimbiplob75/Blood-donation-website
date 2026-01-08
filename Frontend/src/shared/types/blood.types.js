@@ -1,4 +1,8 @@
 // Blood-related type definitions
+
+// Export blood groups array for easy import
+module.exports.BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
 module.exports.BloodTypes = {
   BLOOD_GROUPS: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'],
   

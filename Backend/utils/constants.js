@@ -1,3 +1,6 @@
+// Blood group constants
+const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
 module.exports = {
   PORT: process.env.PORT || 5000,
   TEACHER_CODE_ID: process.env.TEACHER_CODE_ID || "685659a18de2478d1ca142d8",
@@ -5,11 +8,12 @@ module.exports = {
   COOKIE_SECRET: process.env.COOKIE_SECRET,
   DB_URI: process.env.DB_URI,
   NODE_ENV: process.env.NODE_ENV || 'production',
-  MAX_FILE_SIZE: 10 * 1024 * 1024 
+  MAX_FILE_SIZE: 10 * 1024 * 1024,
+  BLOOD_GROUPS: BLOOD_GROUPS
 };
 
-// Blood group constants
-exports.BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+// Also export separately for convenience
+exports.BLOOD_GROUPS = BLOOD_GROUPS;
 
 // User roles
 exports.USER_ROLES = {

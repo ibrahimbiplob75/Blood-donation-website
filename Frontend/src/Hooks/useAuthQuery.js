@@ -74,10 +74,10 @@ export const useUserRole = () => {
 
   return {
     role: user?.role || null,
-    isAdmin: user?.role === 'Admin' || user?.role === 'admin',
-    authenticated: data?.authenticated || false,
+    isAdmin: user?.role === 'Admin' || user?.role === 'admin' || user?.role === 'executive',
+    authenticated: data?.authenticated || !!storedUser,
     user: user,
-    isLoading,
+    isLoading: isLoading,
     error,
   };
 };

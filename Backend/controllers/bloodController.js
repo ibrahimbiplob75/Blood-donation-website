@@ -273,7 +273,7 @@ const uploadBloodDonors = async (req, res) => {
     }
 
     const validationErrors = [];
-    const validBloodGroups = ['A+', 'A-', 'Aâˆ’', 'B+', 'B-', 'Bâˆ’', 'O+', 'O-', 'Oâˆ’', 'AB+', 'AB-', 'ABâˆ’'];
+    const validBloodGroups = ['A+', 'A-', 'B+', 'B-',  'O+', 'O-',  'AB+', 'AB-',];
     
     const processedData = jsonData.map((row, index) => {
       const processedRow = { ...row };

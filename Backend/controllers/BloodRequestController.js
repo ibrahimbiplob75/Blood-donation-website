@@ -25,7 +25,7 @@ const createBloodRequest = async (req, res) => {
       });
     }
 
-    const { bloodRequestsCollection } = getCollections();
+    const { bloodRequestsCollection, usersCollection } = getCollections();
 
     const newRequest = {
       bloodGroup: bloodGroup.trim(),
@@ -73,7 +73,7 @@ const getBloodRequests = async (req, res) => {
   try {
     const { bloodGroup, district, status, urgency, includeUnapproved } = req.query;
     
-    const { bloodRequestsCollection } = getCollections();
+    const { bloodRequestsCollection, usersCollection } = getCollections();
 
     // Build query
     let query = {};
@@ -149,7 +149,12 @@ const updateBloodRequestStatus = async (req, res) => {
       return res.status(400).json({ message: 'Invalid status' });
     }
 
-    const { bloodRequestsCollection } = getCollections();
+    const { bloodRequestsCollection, usersCollection } = getCollections();
+
+    const existing = await bloodRequestsCollection.findOne({ _id: new ObjectId(id) });
+    if (!existing) {
+      return res.status(404).json({ message: 'Blood request not found' });
+    }
 
     const updateData = {
       status,
@@ -166,6 +171,9 @@ const updateBloodRequestStatus = async (req, res) => {
       if (fulfilledBy) {
         updateData.fulfilledBy = fulfilledBy;
       }
+      if (!existing.countersUpdated) {
+        updateData.countersUpdated = true;
+      }
     }
 
     const result = await bloodRequestsCollection.updateOne(
@@ -180,6 +188,23 @@ const updateBloodRequestStatus = async (req, res) => {
     const updatedRequest = await bloodRequestsCollection.findOne({
       _id: new ObjectId(id)
     });
+
+    // If transitioning to fulfilled (and not previously counted), bump counters
+    if (status === 'fulfilled' && existing.status !== 'fulfilled' && !existing.countersUpdated) {
+      if (existing.requesterEmail) {
+        await usersCollection.updateOne(
+          { email: existing.requesterEmail },
+          { $inc: { bloodTaken: 1 }, $set: { updatedAt: new Date() } }
+        );
+      }
+
+      if (fulfilledBy) {
+        await usersCollection.updateOne(
+          { email: fulfilledBy },
+          { $inc: { bloodGiven: 1 }, $set: { updatedAt: new Date() } }
+        );
+      }
+    }
 
     res.status(200).json({
       message: 'Blood request status updated successfully',
@@ -206,9 +231,7 @@ const deleteBloodRequest = async (req, res) => {
     }
 
     const { bloodRequestsCollection } = getCollections();
-    const result = await bloodRequestsCollection.deleteOne({ 
-      _id: new ObjectId(id) 
-    });
+    const result = await bloodRequestsCollection.deleteOne({ _id: new ObjectId(id) });
 
     if (result.deletedCount === 0) {
       return res.status(404).json({ message: 'Blood request not found' });
@@ -216,7 +239,7 @@ const deleteBloodRequest = async (req, res) => {
 
     res.status(200).json({
       message: 'Blood request deleted successfully',
-      id: id
+      id
     });
   } catch (error) {
     console.error('Delete blood request error:', error);
@@ -460,7 +483,7 @@ const donateFromBloodBank = async (req, res) => {
       return res.status(400).json({ message: 'Valid units required' });
     }
 
-    const { bloodRequestsCollection, bloodStockCollection, bloodTransactionsCollection } = getCollections();
+    const { bloodRequestsCollection, bloodStockCollection, bloodTransactionsCollection, usersCollection } = getCollections();
 
     // Get the blood request
     const request = await bloodRequestsCollection.findOne({ _id: new ObjectId(id) });
@@ -525,7 +548,8 @@ const donateFromBloodBank = async (req, res) => {
           donorName: 'Blood Bank Stock',
           donorPhone: 'N/A',
           unitsProvided: parseInt(units),
-          updatedAt: new Date()
+          updatedAt: new Date(),
+          countersUpdated: true
         } 
       }
     );
@@ -533,6 +557,14 @@ const donateFromBloodBank = async (req, res) => {
     const updatedRequest = await bloodRequestsCollection.findOne({
       _id: new ObjectId(id)
     });
+
+    // Increment requester bloodTaken when fulfilled via blood bank
+    if (updatedRequest?.requesterEmail) {
+      await usersCollection.updateOne(
+        { email: updatedRequest.requesterEmail },
+        { $inc: { bloodTaken: 1 }, $set: { updatedAt: new Date() } }
+      );
+    }
 
     res.status(200).json({
       message: 'Blood donated from blood bank successfully',
@@ -543,6 +575,108 @@ const donateFromBloodBank = async (req, res) => {
     console.error('Donate from blood bank error:', error);
     res.status(500).json({
       message: 'Failed to donate from blood bank',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Donate blood to a request (user donation)
+ * Regular users can donate to blood requests
+ */
+const donateToBloodRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { donorName, donorPhone, fulfilledBy } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid request ID' });
+    }
+
+    if (!donorName || !donorPhone) {
+      return res.status(400).json({ message: 'Donor name and phone are required' });
+    }
+
+    const { bloodRequestsCollection, bloodTransactionsCollection, usersCollection } = getCollections();
+
+    // Check if request exists and is pending
+    const request = await bloodRequestsCollection.findOne({ _id: new ObjectId(id) });
+    
+    if (!request) {
+      return res.status(404).json({ message: 'Blood request not found' });
+    }
+
+    if (request.status !== 'pending') {
+      return res.status(400).json({ message: 'Request is no longer pending' });
+    }
+
+    // Update request status to active with donor info
+    const result = await bloodRequestsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { 
+        $set: { 
+          status: 'active',
+          donorName: donorName,
+          donorPhone: donorPhone,
+          fulfilledBy: fulfilledBy || 'user',
+          updatedAt: new Date()
+        } 
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: 'Blood request not found' });
+    }
+
+    // Record the transaction
+    await bloodTransactionsCollection.insertOne({
+      type: 'donation',
+      bloodGroup: request.bloodGroup,
+      units: 1,
+      donorName: donorName,
+      donorPhone: donorPhone,
+      receiverName: request.requesterName,
+      hospitalName: request.hospitalName,
+      requestId: request._id.toString(),
+      donatedAt: new Date(),
+      donatedBy: fulfilledBy || 'user',
+      status: 'completed',
+      notes: `User donation for: ${request.reason}`
+    });
+
+    const updatedRequest = await bloodRequestsCollection.findOne({
+      _id: new ObjectId(id)
+    });
+
+    // Update donor and requester counters immediately for direct donations
+    if (updatedRequest?.requesterEmail) {
+      await usersCollection.updateOne(
+        { email: updatedRequest.requesterEmail },
+        { $inc: { bloodTaken: 1 }, $set: { updatedAt: new Date() } }
+      );
+    }
+
+    if (fulfilledBy) {
+      await usersCollection.updateOne(
+        { email: fulfilledBy },
+        { $inc: { bloodGiven: 1 }, $set: { updatedAt: new Date() } }
+      );
+    }
+
+    // Mark to avoid double counting when status later moves to fulfilled
+    await bloodRequestsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { countersUpdated: true } }
+    );
+
+    res.status(200).json({
+      message: 'Thank you for your donation!',
+      request: updatedRequest
+    });
+  } catch (error) {
+    console.error('Donate to blood request error:', error);
+    res.status(500).json({
+      message: 'Failed to register donation',
       error: error.message
     });
   }
@@ -559,5 +693,6 @@ module.exports = {
   getPendingBloodRequests,
   approveBloodRequest,
   rejectBloodRequest,
-  donateFromBloodBank
+  donateFromBloodBank,
+  donateToBloodRequest
 };

@@ -1,12 +1,14 @@
 import { useState, useEffect, useContext } from "react";
 import { AuthProvider } from "../../context/ContextProvider.jsx";
 import AxiosPublic from "../../context/AxiosPublic.jsx";
+import useAxios from "../../Hooks/useAxios.js";
 import Swal from "sweetalert2";
 import { motion } from "framer-motion";
 
 const BloodRequests = () => {
   const { user, userRole } = useContext(AuthProvider);
   const [publicAxios] = AxiosPublic();
+  const secureAxios = useAxios();
 
   const [requests, setRequests] = useState([]);
   const [filteredRequests, setFilteredRequests] = useState([]);
@@ -165,16 +167,16 @@ const BloodRequests = () => {
     try {
       let donorName, donorPhone;
 
-      if (userRole === "admin" || userRole === "executive") {
+      if (userRole === "admin" || userRole === "Admin" || userRole === "executive") {
         donorName = "Blood Bank";
         // Fetch admin phone from user data
-        const userResponse = await publicAxios.get(
+        const userResponse = await secureAxios.get(
           `/users?email=${user.email}`
         );
         donorPhone = userResponse.data[0]?.phone || "Not Available";
       } else {
         // Regular user
-        const userResponse = await publicAxios.get(
+        const userResponse = await secureAxios.get(
           `/users?email=${user.email}`
         );
         donorName =
@@ -182,8 +184,8 @@ const BloodRequests = () => {
         donorPhone = userResponse.data[0]?.phone || "Not Available";
       }
 
-      await publicAxios.put(`/blood-requests/${selectedRequest._id}/status`, {
-        status: "active",
+      // Use secureAxios (with token) for authenticated request
+      await secureAxios.put(`/blood-requests/${selectedRequest._id}/donate`, {
         donorName: donorName,
         donorPhone: donorPhone,
         fulfilledBy: user?.email || "",
@@ -211,7 +213,7 @@ const BloodRequests = () => {
   };
 
   const handleStatusUpdate = async (requestId, newStatus) => {
-    if (userRole !== "admin" && userRole !== "executive") {
+    if (userRole !== "admin" && userRole !== "Admin" && userRole !== "executive") {
       Swal.fire({
         icon: "warning",
         title: "Access Denied",
@@ -232,7 +234,8 @@ const BloodRequests = () => {
       });
 
       if (result.isConfirmed) {
-        await publicAxios.put(`/blood-requests/${requestId}/status`, {
+        // Use secureAxios with token for authenticated request
+        await secureAxios.put(`/blood-requests/${requestId}/status`, {
           status: newStatus,
           fulfilledBy: user?.email || "",
         });
@@ -306,12 +309,25 @@ const BloodRequests = () => {
   // Fetch blood stock
   const fetchBloodStock = async () => {
     try {
-      const response = await publicAxios.get("/blood-stock");
-      if (response.data.success) {
+      const response = await publicAxios.get("/admin/all-blood-stock");
+      if (response.data.success && response.data.stock) {
         setBloodStock(response.data.stock);
+      } else {
+        // Initialize with all blood groups set to 0 if no data
+        const emptyStock = {};
+        bloodGroups.forEach(group => {
+          emptyStock[group] = 0;
+        });
+        setBloodStock(emptyStock);
       }
     } catch (error) {
       console.error("Error fetching blood stock:", error);
+      // Initialize with all blood groups set to 0 on error
+      const emptyStock = {};
+      bloodGroups.forEach(group => {
+        emptyStock[group] = 0;
+      });
+      setBloodStock(emptyStock);
     }
   };
 
@@ -346,14 +362,13 @@ const BloodRequests = () => {
 
     try {
       setLoading(true);
-      const response = await publicAxios.put(
+      const response = await secureAxios.put(
         `/blood-requests/${selectedRequest._id}/donate-from-bank`,
         {
           units: parseInt(bankDonationUnits),
           adminEmail: user?.email,
           adminName: user?.name || user?.displayName,
-        },
-        { withCredentials: true }
+        }
       );
 
       if (response.data) {
@@ -723,20 +738,31 @@ const BloodRequests = () => {
                 <div>{request.requesterName || "Anonymous"}</div>
               </div>
 
-              {/* Donor Info (if active) */}
-              {request.status === "active" && request.donorName && canSeeDonorDetails(request) && (
-                <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="text-sm font-semibold text-blue-800 mb-1">
-                    Donor Assigned:
+              {/* Donor Info (active or fulfilled) */}
+              {["active", "fulfilled"].includes(request.status) &&
+                request.donorName &&
+                canSeeDonorDetails(request) && (
+                  <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="text-sm font-semibold text-blue-800">
+                        {request.donorName.includes("Blood Bank")
+                          ? "Assigned from Blood Bank"
+                          : "Donor Assigned:"}
+                      </div>
+                      {request.donorName.includes("Blood Bank") && (
+                        <span className="badge badge-sm badge-primary">Blood Bank</span>
+                      )}
+                    </div>
+                    <div className="text-sm text-blue-700">
+                      {request.donorName}
+                    </div>
+                    {request.donorPhone && request.donorPhone !== "N/A" && (
+                      <div className="text-sm text-blue-700">
+                        {request.donorPhone}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-sm text-blue-700">
-                    {request.donorName}
-                  </div>
-                  <div className="text-sm text-blue-700">
-                    {request.donorPhone}
-                  </div>
-                </div>
-              )}
+                )}
 
               {/* Actions */}
               <div className="flex gap-2 flex-wrap">

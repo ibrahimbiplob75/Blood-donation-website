@@ -155,42 +155,63 @@ const ContextProvider = ({ children }) => {
 
       // If no valid admin session, check Firebase
       const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-        setUser(currentUser);
-        setIsAdmin(false);
+        try {
+          if (currentUser && currentUser.email) {
+            setUser(currentUser);
+            setIsAdmin(false);
 
-        if (currentUser && currentUser.email) {
-          try {
-            const userInfo = { email: currentUser.email };
-            const res = await publicAxios.post("/jwt", userInfo);
+            try {
+              // Get JWT token
+              const userInfo = { email: currentUser.email };
+              const res = await publicAxios.post("/jwt", userInfo);
 
-            if (res?.data?.token) {
-              const userData = {
-                id: currentUser.uid,
-                name: currentUser.displayName,
-                email: currentUser.email,
-                role: "user",
-                avatar: currentUser.photoURL || null,
-              };
-              setUserToken(res.data.token, userData);
+              if (res?.data?.token) {
+                const userData = {
+                  id: currentUser.uid,
+                  name: currentUser.displayName,
+                  email: currentUser.email,
+                  role: "user",
+                  avatar: currentUser.photoURL || null,
+                };
+                setUserToken(res.data.token, userData);
+              }
+
+              // Fetch user role - IMPORTANT: This must complete before setting loading to false
+              const userRes = await publicAxios.get(
+                `/users?email=${currentUser.email}`
+              );
+              
+              if (userRes?.data?.[0]) {
+                const userRole = userRes.data[0].role || "user";
+                const userData = {
+                  id: currentUser.uid,
+                  name: currentUser.displayName,
+                  email: currentUser.email,
+                  role: userRole,
+                  avatar: currentUser.photoURL || null,
+                };
+                // Persist user data with correct role
+                setUserData(userData);
+                setUserRole(userRole);
+              } else {
+                setUserRole("user");
+              }
+            } catch (error) {
+              console.error("Error fetching user data:", error);
+              clearAllTokens();
+              setUserRole("user");
             }
-
-            const userRes = await publicAxios.get(
-              `/users?email=${currentUser.email}`
-            );
-            if (userRes?.data?.[0]) {
-              setUserRole(userRes.data[0].role || "user");
-            }
-          } catch (error) {
-            console.error("Error fetching user data:", error);
+          } else {
+            // No user logged in
+            setUser(null);
             clearAllTokens();
             setUserRole(null);
+            setIsAdmin(false);
           }
-        } else {
-          clearAllTokens();
-          setUserRole(null);
+        } finally {
+          // Always set loading to false when auth state change is complete
+          setLoading(false);
         }
-
-        setLoading(false);
       });
 
       return () => unsubscribe();

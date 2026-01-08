@@ -24,7 +24,7 @@ const BloodBank = () => {
   const [filterDistrict, setFilterDistrict] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const bloodGroups = ["A+", "A−", "B+", "B−", "O+", "O−", "AB+", "AB−"];
+  const bloodGroups = ["A+", "A−", "B+", "B-", "O+", "O-", "AB+", "AB−"];
 
   const districts = [
     "All",
@@ -214,9 +214,9 @@ const BloodBank = () => {
       "A+": "bg-red-100 text-red-800",
       "A−": "bg-red-200 text-red-900",
       "B+": "bg-blue-100 text-blue-800",
-      "B−": "bg-blue-200 text-blue-900",
+      "B-": "bg-blue-200 text-blue-900",
       "O+": "bg-green-100 text-green-800",
-      "O−": "bg-green-200 text-green-900",
+      "O-": "bg-green-200 text-green-900",
       "AB+": "bg-purple-100 text-purple-800",
       "AB−": "bg-purple-200 text-purple-900",
     };

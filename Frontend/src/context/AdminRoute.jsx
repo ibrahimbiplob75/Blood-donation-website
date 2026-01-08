@@ -1,12 +1,18 @@
 import { Navigate } from "react-router-dom";
 import { useUserRole } from "../Hooks/useAuthQuery.js";
+import { useContext } from "react";
+import { AuthProvider } from "./ContextProvider.jsx";
 import Loader from "../shared/Loader.jsx";
 
 const AdminRoute = ({ children }) => {
+  // Get auth context loading state
+  const { loader: authLoading } = useContext(AuthProvider);
+  
   // Use Tanstack Query for better state management and caching
   const { isAdmin, authenticated, user, isLoading } = useUserRole();
 
-  if (isLoading) {
+  // Show loader while context is initializing
+  if (authLoading || isLoading) {
     return <Loader></Loader>;
   }
 

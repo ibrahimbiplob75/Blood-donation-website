@@ -188,7 +188,7 @@ const Footer = () => {
 
       {/* Bottom Copyright */}
       <div className="text-sm md:text-xl text-white font-normal">
-        Copy Right © 2025 . This site is develop and maintained by{" "}
+        Copy Right © 2026 . This site is develop and maintained by{" "}
         <span className="font-semibold">
           <Link
             target="_blank"

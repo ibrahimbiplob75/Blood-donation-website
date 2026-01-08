@@ -1,15 +1,15 @@
 const { getCollections } = require('../config/database');
 const { ObjectId } = require('mongodb');
+const { BLOOD_GROUPS } = require('../utils/constants');
 
 // Get current blood stock
 const getBloodStock = async (req, res) => {
   try {
     const { bloodStockCollection } = getCollections();
     
-    const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
     const stock = {};
     
-    for (const group of bloodGroups) {
+    for (const group of BLOOD_GROUPS) {
       const stockDoc = await bloodStockCollection.findOne({ bloodGroup: group });
       stock[group] = stockDoc ? stockDoc.units : 0;
     }
@@ -400,9 +400,18 @@ const getAllBloodStock = async (req, res) => {
     const { bloodStockCollection } = getCollections();
     const stocks = await bloodStockCollection.find().sort({ bloodGroup: 1 }).toArray();
     
+    // Convert array to object with blood groups as keys
+    const stockObj = {};
+    
+    for (const group of BLOOD_GROUPS) {
+      const stockDoc = stocks.find(s => s.bloodGroup === group);
+      stockObj[group] = stockDoc ? stockDoc.units : 0;
+    }
+    
     res.json({
       success: true,
-      stocks
+      stock: stockObj,
+      stocks: stocks // Keep original array for backward compatibility
     });
   } catch (error) {
     console.error('Get all stock error:', error);
