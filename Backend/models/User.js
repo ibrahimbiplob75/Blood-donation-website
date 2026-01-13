@@ -26,7 +26,7 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['donor', 'recipient', 'hospital', 'admin', 'moderator'],
+    enum: ['donor', 'recipient', 'hospital', 'admin', 'moderator', 'Admin'],
     default: 'donor',
   },
   phone: {
@@ -35,6 +35,24 @@ const UserSchema = new mongoose.Schema({
   },
   address: {
     type: String,
+  },
+  bloodGroup: {
+    type: String,
+    enum: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'],
+  },
+  district: {
+    type: String,
+  },
+  lastDonateDate: {
+    type: Date,
+  },
+  bloodGiven: {
+    type: Number,
+    default: 0,
+  },
+  bloodTaken: {
+    type: Number,
+    default: 0,
   },
   isActive: {
     type: Boolean,
@@ -48,6 +66,10 @@ const UserSchema = new mongoose.Schema({
   resetPasswordToken: String,
   resetPasswordExpire: Date,
   createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+  updatedAt: {
     type: Date,
     default: Date.now,
   },

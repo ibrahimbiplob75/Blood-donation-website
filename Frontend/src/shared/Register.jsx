@@ -219,6 +219,7 @@ const Register = () => {
                 {...register("phone", { required: true })}
                 placeholder="01XXXXXXXXX"
                 className="input input-bordered"
+                required
               />
               {errors.phone && (
                 <span className="text-red-600">Phone number is required</span>

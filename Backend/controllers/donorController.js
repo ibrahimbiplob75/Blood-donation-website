@@ -125,3 +125,80 @@ exports.searchDonors = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// @desc    Get donor statistics from Users collection (public endpoint)
+// @route   GET /api/donor/public-stats
+// @access  Public
+exports.getDonorStats = async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const BloodStock = require('../models/BloodStock');
+
+    // Calculate date 120 days ago for eligibility
+    const eligibilityDate = new Date();
+    eligibilityDate.setDate(eligibilityDate.getDate() - 120);
+
+    // Get all users with bloodGroup (potential donors)
+    const allUsers = await User.find({ 
+      bloodGroup: { $exists: true, $ne: null }
+    }).select('bloodGroup district lastDonateDate');
+
+    // Initialize statistics
+    let totalDonors = allUsers.length;
+    let eligibleDonors = 0;
+    const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+    const bloodGroupStats = {};
+    const districtStats = {};
+
+    // Initialize blood group stats with zeros
+    bloodGroups.forEach(type => {
+      bloodGroupStats[type] = 0;
+    });
+
+    // Process each user to calculate statistics
+    allUsers.forEach(user => {
+      // Count by blood group
+      if (user.bloodGroup && bloodGroupStats.hasOwnProperty(user.bloodGroup)) {
+        bloodGroupStats[user.bloodGroup]++;
+      }
+
+      // Count by district
+      if (user.district) {
+        districtStats[user.district] = (districtStats[user.district] || 0) + 1;
+      }
+
+      // Check eligibility: lastDonateDate is more than 120 days ago OR no lastDonateDate
+      if (!user.lastDonateDate || new Date(user.lastDonateDate) <= eligibilityDate) {
+        eligibleDonors++;
+      }
+    });
+
+    // Get blood stock data from BloodStock collection
+    const bloodStocks = await BloodStock.find({});
+    const bloodStockStats = {};
+    
+    bloodGroups.forEach(type => {
+      const stock = bloodStocks.find(s => s.bloodGroup === type);
+      bloodStockStats[type] = stock ? stock.units : 0;
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalDonors,
+        eligibleDonors,
+        bloodGroupStats,
+        districtStats,
+        bloodStockStats,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching donor statistics:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching donor statistics',
+      error: error.message 
+    });
+  }
+};
+

@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { setupMiddleware } = require('./config/config');
 const { connectToDatabase, isConnectionReady } = require('./config/database');
 const { checkAndUpdateActiveDonar } = require('./utils/helpers');
@@ -11,6 +12,7 @@ const authRoutes = require('./routes/Authroutes');
 const bloodRequestRoutes = require('./routes/Bloodrequest');
 const bloodStockRoutes = require('./routes/bloodStockRoutes');
 const donationRequestRoutes = require('./routes/donationRequest');
+const donorRoutes = require('./routes/donor');
 
 const { loginAdmin, verifyAdminToken } = require('./services/authService');
 const { generateToken } = require('./middleware/auth');
@@ -75,6 +77,7 @@ app.use('/', userRoutes);
 app.use('/', bloodRequestRoutes);
 app.use('/', bloodStockRoutes);
 app.use('/', donationRequestRoutes);
+app.use('/donor', donorRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Global error handler:', err);
@@ -94,6 +97,17 @@ app.get('/', (req, res) => {
 
 async function startServer() {
   try {
+    // Connect Mongoose for model operations
+    if (!mongoose.connection.readyState) {
+      console.log('Connecting to MongoDB via Mongoose...');
+      await mongoose.connect(process.env.DB_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+      });
+      console.log('Mongoose connection successful');
+    }
     
     await connectToDatabase();
     startAvailabilityScheduler();

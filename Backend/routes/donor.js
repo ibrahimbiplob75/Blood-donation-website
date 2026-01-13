@@ -6,12 +6,14 @@ const {
   updateDonorProfile,
   getAllDonors,
   searchDonors,
+  getDonorStats,
 } = require('../controllers/donorController');
-const { protect, authorize } = require('../middleware/auth');
 
 router.post('/register', registerDonor);
+router.get('/public-stats', getDonorStats); // Public endpoint for public donor statistics
+router.get('/stats', getDonorStats); // Public endpoint for statistics
 // router.get('/profile',  getDonorProfile);
-router.get('/all', protect, authorize('admin', 'hospital'), getAllDonors);
-router.post('/search', protect, searchDonors);
+router.get('/all', getAllDonors); // Also keep /all endpoint public for now
+router.post('/search', searchDonors);
 
 module.exports = router;
