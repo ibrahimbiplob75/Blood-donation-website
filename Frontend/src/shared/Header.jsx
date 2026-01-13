@@ -25,8 +25,8 @@ const Header = () => {
     { href: "/", label: "হোম" },
     { href: "/blood-bank", label: "Blood bank" },
     { href: "/blood-requests", label: "Blood Request" },
-    { href: "/", label: "গ্যালারি" },
-    { href: "/", label: "আমাদের সম্পর্কে" },
+    { href: "/blogs", label: "ব্লগ" },
+    { href: "/about", label: "আমাদের সম্পর্কে" },
   ];
 
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -54,10 +54,11 @@ const Header = () => {
           className="flex items-center gap-2 cursor-pointer"
           onClick={() => navigate("/")}
         >
-          <img src={banglaLogo} alt="logo" className="w-12 h-12" />
-          <h1 className="font-extrabold text-xl text-[#780A0A] hidden md:block">
+          <img src={banglaLogo} alt="logo" className="w-16 h-16" />
+
+          {/* <h1 className="font-extrabold text-xl text-[#780A0A] hidden md:block">
             রক্তের বন্ধন
-          </h1>
+          </h1>*/}
         </div>
 
         {/* Desktop Nav */}

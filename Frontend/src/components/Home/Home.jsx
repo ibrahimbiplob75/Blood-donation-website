@@ -138,14 +138,15 @@ const Home = () => {
         <div className="absolute inset-0 bg-black bg-opacity-60 rounded-md"></div>
 
         <div className="relative z-10 text-center px-4 sm:px-6 md:px-8 w-full">
-          <img
+          {/* <img
             src={icon}
             alt="Logo"
             className="w-16 sm:w-20 md:w-24 lg:w-32 mb-3 sm:mb-4 mx-auto"
-          />
+          /> */}
           <h1 className="text-base sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl w-full sm:w-[90%] md:w-4/5 lg:w-3/4 xl:w-2/3 2xl:w-1/2 mx-auto font-bold text-slate-300 drop-shadow-lg leading-tight sm:leading-snug md:leading-normal px-2">
-            "এক ফোঁটা রক্ত, একটি জীবন।" আমাদের লক্ষ্য—রক্তদাতা ও রোগীদের সংযুক্ত
-            করা, যেন কেউ রক্তের অভাবে প্রাণ না হারায়।
+            {/* "এক ফোঁটা রক্ত, একটি জীবন।" আমাদের লক্ষ্য—রক্তদাতা ও রোগীদের সংযুক্ত
+            করা, যেন কেউ রক্তের অভাবে প্রাণ না হারায়। */}
+             “Fellowship through service” Donate Blood, Save Lives.
           </h1>
           <div className="mt-6 sm:mt-8 md:mt-10 mb-8 sm:mb-12 md:mb-16 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center w-full px-4">
             <button

@@ -21,8 +21,7 @@ const Footer = () => {
             onClick={() => router.replace("/")}
           />
           <p className="text-[12px] sm:text-sm md:text-lg text-white font-normal leading-relaxed">
-            “এক ফোঁটা রক্ত, একটি জীবন।” আমাদের লক্ষ্য—রক্তদাতা ও রোগীদের সংযুক্ত
-            করা, যেন কেউ রক্তের অভাবে প্রাণ না হারায়।
+            “Fellowship through service” Donate Blood, Save Lives.
           </p>
         </div>
 
@@ -132,9 +131,12 @@ const Footer = () => {
           <div className="text-sm space-y-1 text-white">
             <p>
               📞 কল করুন:{" "}
-              <a href="tel:01712345678" className="font-semibold text-white">
-                01712-345678
+              <a href="tel:01870704080" className="font-semibold text-white">
+                01870704080
               </a>
+              <br></br>
+              📞 কল করুন:{" "}
+              <a href="tel:01870705048" className="font-semibold text-white">01870705048</a>
             </p>
             <p>
               📧 ইমেইল:{" "}
@@ -142,10 +144,11 @@ const Footer = () => {
                 href="mailto:help@bloodlink.org"
                 className="underline text-white"
               >
-                help@bloodlink.org
+                rotaractrmcpioneer@gmail.com
               </a>
             </p>
-            <p>📍 ঠিকানা: ঢাকা, বাংলাদেশ</p>
+            {/* <p>Rotaract Club of RMC Pioneer</p> */}
+            <p>📍 ঠিকানা: Rajshahi Medical College, Rajshahi, Bangladesh</p>
           </div>
           {/* <div className="flex gap-4 mt-4">
             <Link href={"https://facebook.com"} target="_blank">
