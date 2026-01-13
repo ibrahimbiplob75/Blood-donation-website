@@ -21,6 +21,7 @@ function setupMiddleware(app) {
   
   const corsOptions = {
     origin: [
+      'https://rmcrotaract.org',
       'https://blood-management-rmc.web.app',
       'http://localhost:5173',
     ],

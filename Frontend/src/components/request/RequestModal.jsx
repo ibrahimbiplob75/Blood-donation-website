@@ -16,7 +16,7 @@ const RequestModal = ({ isOpen, onClose }) => {
   const [publicAxios] = AxiosPublic();
   const [loading, setLoading] = useState(false);
 
-  const bloodGroups = ["A+", "A−", "B+", "B-", "O+", "O-", "AB+", "AB−"];
+  const bloodGroups = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
 
   const districts = [
     "Dhaka",
