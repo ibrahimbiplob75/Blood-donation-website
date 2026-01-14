@@ -247,14 +247,14 @@ const BloodBank = () => {
         </p>
 
         {/* Donate Now Button */}
-        <div className="mt-4">
+        {/* <div className="mt-4">
           <button
             onClick={() => setIsModalOpen(true)}
             className="btn bg-[#780A0A] hover:bg-[#a00b0b] text-white"
           >
             🩸 Request Blood Now
           </button>
-        </div>
+        </div> */}
       </motion.div>
 
       {/* Blood Request Modal */}
@@ -658,7 +658,7 @@ const BloodBank = () => {
       )}
 
       {/* Become a Donor CTA */}
-      <motion.div
+      {/* <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-6 text-center"
@@ -675,7 +675,7 @@ const BloodBank = () => {
         >
           Become a Donor Today
         </button>
-      </motion.div>
+      </motion.div> */}
     </div>
   );
 };

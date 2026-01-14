@@ -17,12 +17,14 @@ import ContextProvider from "./context/ContextProvider.jsx";
 import DonorHistory from "./components/donor/DonorHistory.jsx";
 import BloodStock from "./components/inventory/BloodStock.jsx";
 import BloodRequests from "./components/request/BloodRequests.jsx";
+import BloodDataUpload from "./components/inventory/BloodDataUpload.jsx";
 import BloodBank from "./components/inventory/BloodBank.jsx";
 import UserProfile from "../src/pages/Userprofile.jsx"
 import Statistics from "./components/admin/Statistics.jsx";
 import ApprovalManagement from "./components/admin/ApprovalManagement.jsx";
 import About from "./pages/About.jsx";
 import Donor from "./pages/Donors.jsx";
+import Blogs from "./pages/Blogs.jsx";
 
 // Tanstack Query configuration for better caching and state management
 const queryClient = new QueryClient({
@@ -69,7 +71,7 @@ const router = createBrowserRouter([
       },
       {
         path: "/blogs",
-        element:<About></About>
+        element:<Blogs></Blogs>
       },
       {
         path: "/about",
@@ -90,8 +92,16 @@ const router = createBrowserRouter([
         element: <DashboardHome></DashboardHome>,
       },
       {
+        path: "/admin/blood-upload",
+        element: <BloodDataUpload></BloodDataUpload>,
+      },
+      {
         path: "/admin/blood-stock",
         element: <BloodStock></BloodStock>,
+      },
+      {
+        path: "/admin/donar-list",
+        element: <BloodBank></BloodBank>,
       },
       {
         path: "/admin/donor-history",

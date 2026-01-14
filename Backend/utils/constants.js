@@ -2,8 +2,7 @@
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
 module.exports = {
-  PORT: process.env.PORT || 5000,
-  TEACHER_CODE_ID: process.env.TEACHER_CODE_ID || "685659a18de2478d1ca142d8",
+  PORT: process.env.PORT || 5001,
   JWT_SECRET: process.env.JWT_SECRET,
   COOKIE_SECRET: process.env.COOKIE_SECRET,
   DB_URI: process.env.DB_URI,

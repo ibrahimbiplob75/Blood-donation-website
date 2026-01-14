@@ -27,33 +27,36 @@ const BloodDataUpload = () => {
   const demoData = [
     [
       "Name",
-      "Phone",
-      "Email",
-      "Blood_Group",
-      "District",
-      "Date_of_Birth",
-      "Last_Donation_Date",
-      "Available",
+      "phone",
+      "email",
+      "bloodGroup",
+      "lastDonateDate",
+      "district",
+      "role",
+      "bloodGiven",
+      "bloodTaken",
     ],
     [
       "Md Ibrahim",
       "01571286724",
       "ibrahimbiplob75@gmail.com",
       "B+",
+      "2026-01-15",
       "Dhaka",
-      "2000-03-03",
-      "2025-09-15",
-      "Yes",
+      "donor",
+      "2",
+      "0",
     ],
     [
       "Text",
       "Text (01XXXXXXXXX)",
       "Text (email@example.com)",
       "Text (A+, A-, B+, etc.)",
-      "Text",
       "Date (YYYY-MM-DD)",
-      "Date (YYYY-MM-DD)",
-      "Yes/No",
+      "Text (District)",
+      "Text (admin/donor/user)",
+      "Number (e.g., 0, 1, 2)",
+      "Number (e.g., 0, 1, 2)",
     ],
   ];
 
@@ -161,6 +164,15 @@ const BloodDataUpload = () => {
         solution:
           "Please fix the validation errors listed below and upload again.",
       },
+      COMPLETED_WITH_DUPLICATES: {
+        icon: <FaExclamationTriangle className="text-yellow-500 text-xl" />,
+        title: "Upload Completed with Duplicates",
+        description:
+          error.message ||
+          "Some records were skipped because phone numbers or emails already exist.",
+        solution:
+          "Check the duplicate list below. Update or remove duplicates and upload again if needed.",
+      },
       SERVER_ERROR: {
         icon: <FaTimesCircle className="text-red-500 text-xl" />,
         title: "Upload Error",
@@ -224,7 +236,7 @@ const BloodDataUpload = () => {
                       .map((validationError, index) => (
                         <li key={index} className="flex items-start">
                           <span className="text-red-500 mr-2 font-bold">
-                            â€¢
+                            •
                           </span>
                           <span>{validationError}</span>
                         </li>
@@ -232,6 +244,41 @@ const BloodDataUpload = () => {
                     {error.validationErrors.length > 10 && (
                       <li className="text-red-800 font-semibold mt-2">
                         ... and {error.validationErrors.length - 10} more errors
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {error.duplicates && error.duplicates.length > 0 && (
+              <div className="mt-3 p-4 bg-white rounded-lg border border-yellow-200">
+                <p className="text-sm font-semibold text-yellow-900 mb-2">
+                  Duplicate Records ({error.duplicates.length}):
+                </p>
+                <div className="max-h-48 overflow-y-auto">
+                  <ul className="text-sm text-yellow-700 space-y-3">
+                    {error.duplicates.slice(0, 10).map((duplicate, index) => (
+                      <li key={index} className="bg-yellow-50 p-2 rounded border border-yellow-200">
+                        <div className="font-semibold text-yellow-900">{duplicate.name}</div>
+                        <div className="text-xs mt-1">Phone: {duplicate.phone}</div>
+                        <div className="text-xs">Email: {duplicate.email}</div>
+                        <div className="text-xs font-semibold text-yellow-800 mt-1">
+                          Reason: {duplicate.reason}
+                        </div>
+                        {duplicate.existingUser && (
+                          <div className="mt-2 p-2 bg-white rounded border-l-2 border-yellow-400">
+                            <div className="text-xs font-semibold">Existing Record:</div>
+                            <div className="text-xs">Name: {duplicate.existingUser.Name}</div>
+                            <div className="text-xs">Phone: {duplicate.existingUser.phone}</div>
+                            <div className="text-xs">Email: {duplicate.existingUser.email}</div>
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                    {error.duplicates.length > 10 && (
+                      <li className="text-yellow-800 font-semibold mt-2">
+                        ... and {error.duplicates.length - 10} more duplicates
                       </li>
                     )}
                   </ul>
@@ -264,7 +311,7 @@ const BloodDataUpload = () => {
       formData.append("file", file);
 
       const response = await publicAxios.post(
-        "/upload-blood-donors",
+        "/bulk-upload",
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },
@@ -325,10 +372,10 @@ const BloodDataUpload = () => {
         <div className="text-center mb-8">
           <h1 className="text-3xl md:text-4xl font-bold text-[#780A0A] mb-2 flex items-center justify-center gap-3">
             <FaFileExcel className="text-green-600" />
-            Blood Donor Data Upload
+            Bulk User Upload
           </h1>
           <p className="text-gray-600">
-            Upload Excel file with donor information
+            Upload Excel file with user/donor information
           </p>
         </div>
 
@@ -471,7 +518,7 @@ const BloodDataUpload = () => {
               ) : (
                 <span className="flex items-center justify-center gap-2">
                   <FaUpload />
-                  Upload Donor Data
+                  Upload User Data
                 </span>
               )}
             </button>
@@ -502,10 +549,15 @@ const BloodDataUpload = () => {
             </h4>
             <ul className="text-sm text-yellow-700 space-y-1 ml-6 list-disc">
               <li>Only Excel files (.xlsx or .xls) are accepted</li>
-              <li>Phone numbers must be in format: 01XXXXXXXXX</li>
-              <li>Blood groups: A+, Aâˆ’, B+, Bâˆ’, O+, Oâˆ’, AB+, ABâˆ’</li>
-              <li>Dates must be in format: YYYY-MM-DD</li>
-              <li>Available field: Yes or No</li>
+              <li>Required columns: Name, phone, email, bloodGroup, district</li>
+              <li>Optional columns: lastDonateDate (YYYY-MM-DD), role (admin/donor/user), bloodGiven, bloodTaken</li>
+              <li>Phone numbers must be 10+ digits</li>
+              <li>Email must be valid (example@domain.com)</li>
+              <li>Blood groups: A+, A-, B+, B-, O+, O-, AB+, AB-</li>
+              <li>Role options: admin, donor, user (defaults to donor)</li>
+              <li>bloodGiven and bloodTaken must be numbers (defaults to 0)</li>
+              <li>Duplicate phone or email will be rejected</li>
+              <li>Default password for new users will be their phone number</li>
             </ul>
           </div>
         </div>

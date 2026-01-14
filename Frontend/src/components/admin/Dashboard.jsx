@@ -221,18 +221,18 @@ const Dashboard = () => {
                 Donor Management
               </p>
 
-              {/* <li>
+              <li>
                 <Link
-                  to="/admin/profile-analysis"
+                  to="/admin/donar-list"
                   className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
-                    isActive("/admin/profile-analysis")
+                    isActive("/admin/donar-list")
                       ? "bg-red-600 text-white shadow-xl shadow-red-600/50 scale-105 font-semibold"
                       : "hover:bg-red-50 hover:shadow-md text-gray-700"
                   }`}
                 >
-                  <Users size={20} /> Donor Registry
+                  <Users size={20} /> Blood bank List
                 </Link>
-              </li> */}
+              </li>
 
               <li>
                 <Link
@@ -259,18 +259,18 @@ const Dashboard = () => {
                 </Link>
               </li>
 
-              {/* <li>
+              <li>
                 <Link
-                  to="/admin/profile-upload"
+                  to="/admin/blood-upload"
                   className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
-                    isActive("/admin/profile-upload")
+                    isActive("/admin/blood-upload")
                       ? "bg-red-600 text-white shadow-lg shadow-red-600/50 scale-105 font-semibold"
                       : "hover:bg-red-50 hover:shadow-md text-gray-700"
                   }`}
                 >
                   <Heart size={20} /> Add Donor List
                 </Link>
-              </li> */}
+              </li>
 
               <li>
                 <Link

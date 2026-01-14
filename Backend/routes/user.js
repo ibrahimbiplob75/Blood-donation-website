@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { verifyAdmin } = require('../middleware/auth');
+const multer = require('multer');
 const { 
   getUsers, 
   createUser, 
@@ -13,10 +14,16 @@ const {
   getRequestHistory,
   getPendingDonors,
   approveDonor,
-  rejectDonor
+  rejectDonor,
+  uploadUsers
 } = require('../controllers/userController');
 const { verifyToken } = require('../middleware/auth');
 
+// Setup multer for file uploads
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
 
 router.get('/profile',  getUserProfile);
 router.put('/profile',  updateUserProfile);
@@ -33,5 +40,8 @@ router.post('/delete-firebase-user', verifyAdmin, deleteFirebaseUser);
 router.get('/users/admin/pending-donors', verifyAdmin, getPendingDonors);
 router.put('/users/:id/approve-donor', verifyAdmin, approveDonor);
 router.put('/users/:id/reject-donor', verifyAdmin, rejectDonor);
+
+// Bulk user upload route (admin only)
+router.post('/bulk-upload', verifyAdmin, upload.single('file'), uploadUsers);
 
 module.exports = router;
