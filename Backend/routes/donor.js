@@ -10,10 +10,9 @@ const {
 } = require('../controllers/donorController');
 
 router.post('/register', registerDonor);
-router.get('/public-stats', getDonorStats); // Public endpoint for public donor statistics
-router.get('/stats', getDonorStats); // Public endpoint for statistics
-// router.get('/profile',  getDonorProfile);
-router.get('/all', getAllDonors); // Also keep /all endpoint public for now
+router.get('/public-stats', getDonorStats);
+router.get('/stats', getDonorStats);
+router.get('/all', getAllDonors);
 router.post('/search', searchDonors);
 
 module.exports = router;

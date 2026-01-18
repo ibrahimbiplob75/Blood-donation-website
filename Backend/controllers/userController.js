@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const { ObjectId } = require('mongodb');
 const { getCollections } = require('../config/database');
+const admin = require('../config/firebase.admin');
 
 
 const getUsers = async (req, res) => {
@@ -39,7 +40,7 @@ const getUsers = async (req, res) => {
 
 const createUser = async (req, res) => {
   try {
-    const { name, phone,lastDonateDate, email, bloodGroup, district, password } = req.body;
+    const { name, phone, lastDonateDate, email, bloodGroup, district, password, role } = req.body;
     
     const { usersCollection } = getCollections();
     const existingUser = await usersCollection.findOne({
@@ -54,25 +55,65 @@ const createUser = async (req, res) => {
       const saltRounds = 12;
       hashedPassword = await bcrypt.hash(password, saltRounds);
     }
-
+    // Create user in Firebase Auth (Admin SDK) if password provided
+    let firebaseUid = null;
+    if (password && password.trim()) {
+      try {
+        const userRecord = await admin.auth().createUser({
+          email: email.trim().toLowerCase(),
+          password: password,
+          displayName: name ? name.trim() : undefined,
+          emailVerified: false,
+          disabled: false,
+        });
+        firebaseUid = userRecord.uid;
+      } catch (firebaseError) {
+        // Handle known Firebase errors
+        if (firebaseError?.code === 'auth/email-already-exists') {
+          return res.status(409).json({ message: 'Email already exists in Firebase' });
+        }
+        return res.status(500).json({ 
+          message: 'Failed to create Firebase user',
+          error: firebaseError.message 
+        });
+      }
+    }
 
     const newUser = {
       Name: name ? name.trim() : '',
       phone: phone || '',
       lastDonateDate: lastDonateDate || '',
       email: email ? email.trim().toLowerCase() : '',
-      role: 'user',
+      role: role ? String(role).trim().toLowerCase() : 'user',
       bloodTaken: 0,
       bloodGiven: 0,
       bloodGroup: bloodGroup || '',
       district: district || '',
       password: hashedPassword,
+      firebaseUid: firebaseUid || null,
       donorApprovalStatus: 'pending', // New donors need admin approval
       createdAt: new Date(),
       updatedAt: new Date()
     };
     
-    const result = await usersCollection.insertOne(newUser);
+    let result;
+    try {
+      result = await usersCollection.insertOne(newUser);
+    } catch (mongoError) {
+      // Roll back Firebase user creation if Mongo insert fails
+      if (firebaseUid) {
+        try {
+          await admin.auth().deleteUser(firebaseUid);
+        } catch (rollbackError) {
+          // Log rollback failure but continue returning error
+          console.error('Rollback failed: could not delete Firebase user', rollbackError);
+        }
+      }
+      return res.status(500).json({ 
+        message: 'Failed to create user in database',
+        error: mongoError.message 
+      });
+    }
     
     const createdUser = await usersCollection.findOne(
       { _id: result.insertedId },
@@ -159,8 +200,6 @@ const updateUser = async (req, res) => {
     });
   }
 };
-
-const admin = require('../config/firebase.admin'); 
 
 const deleteFirebaseUser = async (req, res) => {
   try {

@@ -152,15 +152,26 @@ const UserManagement = () => {
       Swal.fire({ icon: "error", title: "Role is required" });
       return false;
     }
-    if (formData.password && formData.password.length < 6) {
+    // For new user creation, password is required and must be at least 6 chars
+    if (!editId) {
+      if (!formData.password || formData.password.length < 6) {
+        Swal.fire({
+          icon: "error",
+          title: "Password must be at least 6 characters",
+        });
+        return false;
+      }
+      if (formData.password !== formData.confirmPassword) {
+        Swal.fire({ icon: "error", title: "Passwords do not match" });
+        return false;
+      }
+    }
+    // For updates, if password provided ensure minimum length and match
+    if (editId && formData.password && formData.password.length < 6) {
       Swal.fire({
         icon: "error",
         title: "Password must be at least 6 characters",
       });
-      return false;
-    }
-    if (formData.password && formData.password !== formData.confirmPassword) {
-      Swal.fire({ icon: "error", title: "Passwords do not match" });
       return false;
     }
     return true;
@@ -183,26 +194,37 @@ const UserManagement = () => {
         bloodTaken: parseInt(formData.bloodTaken) || 0,
       };
 
-      if (formData.password && formData.password.trim()) {
+      if (editId) {
+        if (formData.password && formData.password.trim()) {
+          dataToSend.password = formData.password;
+        }
+        await Axios.put(`/users/${editId}`, dataToSend);
+        Swal.fire({
+          position: "top-end",
+          icon: "success",
+          title: "User updated successfully",
+          showConfirmButton: false,
+          timer: 1500,
+        });
+      } else {
+        // New user creation: require password (validated already)
         dataToSend.password = formData.password;
+        await Axios.post("/users", dataToSend);
+        Swal.fire({
+          position: "top-end",
+          icon: "success",
+          title: "User added successfully",
+          showConfirmButton: false,
+          timer: 1500,
+        });
       }
-
-      await Axios.put(`/users/${editId}`, dataToSend);
-
-      Swal.fire({
-        position: "top-end",
-        icon: "success",
-        title: "User updated successfully",
-        showConfirmButton: false,
-        timer: 1500,
-      });
 
       handleCloseModal();
       fetchUsers();
     } catch (error) {
       Swal.fire({
         icon: "error",
-        title: "Failed to update user",
+        title: editId ? "Failed to update user" : "Failed to add user",
         text: error.response?.data?.message || "Server error",
       });
     }
@@ -288,6 +310,24 @@ const UserManagement = () => {
     });
   };
 
+  const openAddModal = () => {
+    setEditId(null);
+    setFormData({
+      name: "",
+      phone: "",
+      email: "",
+      role: "",
+      bloodGroup: "",
+      district: "",
+      lastDonateDate: "",
+      bloodGiven: 0,
+      bloodTaken: 0,
+      password: "",
+      confirmPassword: "",
+    });
+    setShowModal(true);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -301,7 +341,7 @@ const UserManagement = () => {
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-semibold mb-4">Edit User</h2>
+            <h2 className="text-xl font-semibold mb-4">{editId ? "Edit User" : "Add User"}</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
@@ -449,12 +489,12 @@ const UserManagement = () => {
 
                 <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Password (Leave blank to keep current)
+                    {editId ? "Password (Leave blank to keep current)" : "Password *"}
                   </label>
                   <input
                     name="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Enter new password"
+                    placeholder={editId ? "Enter new password" : "Enter password"}
                     value={formData.password}
                     onChange={handleChange}
                     className="border px-3 py-2 rounded w-full focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
@@ -470,7 +510,7 @@ const UserManagement = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Confirm Password
+                    {editId ? "Confirm Password" : "Confirm Password *"}
                   </label>
                   <input
                     name="confirmPassword"
@@ -507,6 +547,14 @@ const UserManagement = () => {
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">User Management</h1>
         <p className="text-gray-600">Manage all users and their details</p>
+        <div className="mt-4">
+          <button
+            onClick={openAddModal}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+          >
+            Add User
+          </button>
+        </div>
       </div>
 
       <div className="mb-4">
