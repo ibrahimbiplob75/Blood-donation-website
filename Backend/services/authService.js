@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const { ObjectId } = require('mongodb');
 const { getCollections } = require('../config/database');
 const jwt = require('jsonwebtoken');
+const { blacklistToken, isTokenBlacklisted } = require('./tokenBlacklistService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
@@ -105,6 +106,32 @@ const loginAdmin = async (req, res) => {
  */
 const logoutAdmin = async (req, res) => {
   try {
+    // Extract token from cookie or header
+    let token = req.cookies?.adminToken;
+    
+    if (!token && req.headers?.authorization) {
+      const parts = req.headers.authorization.split(' ');
+      if (parts.length === 2 && parts[0] === 'Bearer') {
+        token = parts[1];
+      }
+    }
+    
+    // Blacklist the token if it exists
+    if (token) {
+      try {
+        const decoded = verifyToken(token);
+        if (decoded && decoded.userId) {
+          // Calculate token expiry from JWT
+          const expiresAt = decoded.exp ? new Date(decoded.exp * 1000) : new Date(Date.now() + 8 * 60 * 60 * 1000);
+          
+          // Blacklist the token
+          await blacklistToken(token, decoded.userId, expiresAt);
+        }
+      } catch (error) {
+        console.error('Error blacklisting token on logout:', error);
+      }
+    }
+    
     // Clear cookie with all possible configurations
     res.clearCookie('adminToken', {
       httpOnly: true,
@@ -144,6 +171,11 @@ const verifyAdminToken = async (req, res) => {
       if (parts.length === 2 && parts[0] === 'Bearer') {
         token = parts[1];
       }
+    }
+
+    // Check if token is blacklisted first
+    if (token && await isTokenBlacklisted(token)) {
+      return res.status(200).json({ authenticated: false, reason: 'Token revoked' });
     }
 
     const decoded = verifyToken(token);
@@ -204,6 +236,12 @@ const verifyAuthenticated = async (req, res, next) => {
       return res.status(403).json({ error: 'Access denied - no token' });
     }
 
+    // Check if token is blacklisted
+    if (await isTokenBlacklisted(token)) {
+      console.warn('verifyAuthenticated: token is blacklisted');
+      return res.status(403).json({ error: 'Access denied - token revoked' });
+    }
+
     const decoded = verifyToken(token);
     if (decoded) {
       req.user = decoded;
@@ -234,6 +272,12 @@ const verifyAdmin = async (req, res, next) => {
     if (!token) {
       console.warn('verifyAdmin (service): no token provided');
       return res.status(403).json({ error: 'Access denied - no token' });
+    }
+
+    // Check if token is blacklisted
+    if (await isTokenBlacklisted(token)) {
+      console.warn('verifyAdmin (service): token is blacklisted');
+      return res.status(403).json({ error: 'Access denied - token revoked' });
     }
 
     const decoded = verifyToken(token);

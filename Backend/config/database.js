@@ -31,6 +31,18 @@ async function connectToDatabase() {
     collections.bloodStockCollection = db.collection('bloodStock');
     collections.bloodTransactionsCollection = db.collection('bloodTransactions');
     collections.statisticsCollection = db.collection('statistics');
+    collections.blacklistedTokensCollection = db.collection('blacklistedTokens');
+    
+    // Create TTL index on blacklistedTokens collection for automatic cleanup
+    try {
+      await collections.blacklistedTokensCollection.createIndex(
+        { expiresAt: 1 },
+        { expireAfterSeconds: 0 }
+      );
+      console.log('Blacklisted tokens TTL index created');
+    } catch (indexError) {
+      console.warn('TTL index creation failed (may already exist):', indexError.message);
+    }
     
 
     isConnected = true;

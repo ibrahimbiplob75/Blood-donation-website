@@ -20,6 +20,11 @@ import {
   setUserData,
   getUserData 
 } from "../utils/tokenManager.js";
+import { 
+  performCrossDomainLogout,
+  initializeAuthListeners,
+  clearFirebaseIndexedDB 
+} from "../utils/crossDomainAuth.js";
 
 export const AuthProvider = createContext(null);
 
@@ -60,36 +65,33 @@ const ContextProvider = ({ children }) => {
 
   const LogOut = async () => {
     try {
-      // Clear admin token if exists
-      if (hasAdminToken()) {
-        try {
+      // Perform cross-domain logout with backend API call
+      const backendLogoutFn = async () => {
+        if (hasAdminToken()) {
           await publicAxios.post("/admin/logout", {}, { withCredentials: true });
-        } catch (error) {
-          console.error('Admin logout API error:', error);
         }
-      }
-
-      // Clear all tokens using token manager
-      clearAllTokens();
-
-      // Sign out from Firebase
-      try {
-        await signOut(auth);
-      } catch (error) {
-        console.error('Firebase signout error:', error);
-      }
+      };
+      
+      // Execute comprehensive cross-domain logout
+      await performCrossDomainLogout(backendLogoutFn);
 
       // Reset all state
       setIsAdmin(false);
       setUserRole(null);
       setUser(null);
+      
+      return { success: true };
     } catch (error) {
       console.error("Logout error:", error);
+      
       // Force clear even on error
       clearAllTokens();
+      await clearFirebaseIndexedDB();
       setIsAdmin(false);
       setUserRole(null);
       setUser(null);
+      
+      return { success: false, error };
     }
   };
 
@@ -219,6 +221,26 @@ const ContextProvider = ({ children }) => {
 
     initAuth();
   }, [publicAxios]);
+  
+  // Setup cross-tab and cross-domain logout listener
+  useEffect(() => {
+    const handleCrossTabLogout = () => {
+      // Clear local state when logout is triggered from another tab/domain
+      setUser(null);
+      setIsAdmin(false);
+      setUserRole(null);
+      clearAllTokens();
+    };
+    
+    // Initialize cross-tab logout listener
+    const cleanupListener = initializeAuthListeners(handleCrossTabLogout);
+    
+    return () => {
+      if (cleanupListener) {
+        cleanupListener();
+      }
+    };
+  }, []);
 
   const authInfo = {
     user,

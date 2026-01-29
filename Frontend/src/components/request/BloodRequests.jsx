@@ -567,6 +567,7 @@ const BloodRequests = () => {
               onChange={(e) => setFilterBloodGroup(e.target.value)}
               className="select select-bordered w-full"
             >
+
               <option value="">All Blood Groups</option>
               {bloodGroups.map((group) => (
                 <option key={group} value={group}>
@@ -844,6 +845,52 @@ const BloodRequests = () => {
                     Blood Bank
                   </button>
                 )}
+
+                {/* Share Button - Available for all users */}
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}/blood-requests?id=${request._id}`;
+                    navigator.clipboard
+                      .writeText(url)
+                      .then(() => {
+                        Swal.fire({
+                          icon: "success",
+                          title: "Link copied",
+                          text: "Request link copied to clipboard",
+                          timer: 1500,
+                          showConfirmButton: false,
+                          position: "top",
+                        });
+                      })
+                      .catch(() => {
+                        Swal.fire({
+                          icon: "error",
+                          title: "Copy failed",
+                          text: "Could not copy link. Please copy manually.",
+                        });
+                      });
+                  }}
+                  className="btn btn-sm btn-ghost"
+                  aria-label="Share request link"
+                  title="Copy request link"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="w-5 h-5"
+                  >
+                    <circle cx="18" cy="5" r="3"></circle>
+                    <circle cx="6" cy="12" r="3"></circle>
+                    <circle cx="18" cy="19" r="3"></circle>
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                  </svg>
+                </button>
 
                 {/* Admin Actions */}
                 {(userRole === "Admin" || userRole === "executive") && (

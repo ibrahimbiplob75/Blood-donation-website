@@ -14,12 +14,26 @@ const TOKEN_KEYS = {
  * Clear all authentication tokens and user data
  */
 export const clearAllTokens = () => {
+  // Clear application tokens
   localStorage.removeItem(TOKEN_KEYS.ADMIN);
   localStorage.removeItem(TOKEN_KEYS.USER);
   localStorage.removeItem(TOKEN_KEYS.USER_DATA);
-  // Also clear legacy token keys for backward compatibility
+  
+  // Clear legacy token keys for backward compatibility
   localStorage.removeItem('AccessToken');
   localStorage.removeItem('token');
+  
+  // Clear all Firebase-related localStorage items
+  Object.keys(localStorage).forEach(key => {
+    if (key.startsWith('firebase:')) {
+      localStorage.removeItem(key);
+    }
+  });
+  
+  // Clear sessionStorage
+  Object.keys(sessionStorage).forEach(key => {
+    sessionStorage.removeItem(key);
+  });
 };
 
 /**

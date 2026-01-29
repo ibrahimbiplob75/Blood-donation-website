@@ -23,6 +23,11 @@ const Home = () => {
     unitsDonated: 1530,
   });
   const [statsLoading, setStatsLoading] = useState(true);
+  const [latestRequests, setLatestRequests] = useState([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+  const [hasMoreRequests, setHasMoreRequests] = useState(false);
+  const [eligibilityResult, setEligibilityResult] = useState("");
+  const [eligibilityResultColor, setEligibilityResultColor] = useState("green");
   const { user } = useContext(AuthProvider);
   const navigate = useNavigate();
   const axios = useAxios();
@@ -31,7 +36,37 @@ const Home = () => {
   useEffect(() => {
     fetchStatistics();
     fetchPendingCount();
+    fetchLatestRequests();
   }, []);
+
+  const fetchLatestRequests = async () => {
+    try {
+      setRequestsLoading(true);
+      const response = await axios.get("/blood-requests", {
+        params: { status: "pending" },
+      });
+
+      if (Array.isArray(response.data)) {
+        // Sort by urgency (emergency > urgent > normal) then newest first
+        const urgencyRank = { emergency: 0, urgent: 1, normal: 2 };
+        const sorted = response.data
+          .filter((req) => req.status === "pending")
+          .sort((a, b) => {
+            const rankA = urgencyRank[a.urgency] ?? 3;
+            const rankB = urgencyRank[b.urgency] ?? 3;
+            if (rankA !== rankB) return rankA - rankB;
+            return new Date(b.createdAt || b._id) - new Date(a.createdAt || a._id);
+          });
+
+        setHasMoreRequests(sorted.length > 5);
+        setLatestRequests(sorted.slice(0, 5));
+      }
+    } catch (error) {
+      console.error("Failed to fetch latest blood requests:", error);
+    } finally {
+      setRequestsLoading(false);
+    }
+  };
 
   const fetchStatistics = async () => {
     try {
@@ -113,6 +148,14 @@ const Home = () => {
     }
     setIsDonateModalOpen(true);
   };
+
+  // Reset eligibility result whenever modal opens/closes
+  useEffect(() => {
+    if (showEligibilityModal) {
+      setEligibilityResult("");
+      setEligibilityResultColor("green");
+    }
+  }, [showEligibilityModal]);
 
   const images = [
     "/assets/slide1.jpg",
@@ -295,14 +338,21 @@ const Home = () => {
                   const checkboxes = document.querySelectorAll('#donorForm input[type="checkbox"]');
                   const checkedCount = Array.from(checkboxes).filter((c) => c.checked).length;
                   const total = checkboxes.length;
-                  const result = document.getElementById("result");
 
                   if (checkedCount === total) {
-                    result.textContent = "✅ You are likely eligible to donate blood!";
-                    result.style.color = "green";
+                    Swal.fire({
+                      icon: "success",
+                      title: "You are likely eligible to donate blood!",
+                      text: "All checklist items are satisfied.",
+                      confirmButtonText: "Great!",
+                    });
                   } else {
-                    result.textContent = "⚠️ You may not be eligible — please review the unchecked items or consult a blood center.";
-                    result.style.color = "red";
+                    Swal.fire({
+                      icon: "warning",
+                      title: "You may not be eligible",
+                      text: "Please review the unchecked items or consult a blood center.",
+                      confirmButtonText: "OK",
+                    });
                   }
                 }}
                 className="btn btn-error text-white w-full text-base sm:text-lg"
@@ -312,10 +362,10 @@ const Home = () => {
 
               {/* Result */}
               <p
-                id="result"
-                className="font-bold text-center mt-6 text-sm sm:text-base"
-                style={{ fontWeight: "bold", textAlign: "center", marginTop: "20px" }}
-              ></p>
+                className="font-bold text-center mt-6 text-sm sm:text-base text-gray-500"
+              >
+                {"Tip: complete all checks, then tap the button to see your eligibility result."}
+              </p>
             </form>
           </div>
         </div>
@@ -364,6 +414,79 @@ const Home = () => {
             </button>
     }
           </div>
+        </div>
+      </div>
+
+      {/* Latest Blood Requests */}
+      <div className="max-w-5xl mx-auto my-8 sm:my-12 px-4 sm:px-6">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 sm:p-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <div>
+              
+              <h2 className="text-2xl sm:text-3xl font-bold text-red-600">Latest Blood Requests</h2>
+            </div>
+            {hasMoreRequests && (
+              <button
+                onClick={() => navigate("/blood-requests")}
+                className="btn btn-outline btn-error btn-sm sm:btn-md"
+              >
+                View All Requests
+              </button>
+            )}
+          </div>
+
+          {requestsLoading ? (
+            <div className="flex justify-center py-8">
+              <span className="loading loading-spinner loading-md text-error" aria-label="Loading latest requests" />
+            </div>
+          ) : latestRequests.length === 0 ? (
+            <div className="text-center text-gray-500 py-8">No active blood requests right now.</div>
+          ) : (
+            <div className="grid md:grid-cols-4 gap-4">
+              {latestRequests.map((req) => (
+                <div
+                  key={req._id}
+                  className="p-4 rounded-xl border border-gray-100 bg-gradient-to-br from-red-50 to-white shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="badge badge-error badge-outline font-semibold text-xs sm:text-sm">
+                      {req.bloodGroup || "Unknown"}
+                    </span>
+                    <span
+                      className={`badge text-xs sm:text-sm ${
+                        req.urgency === "emergency"
+                          ? "badge-error"
+                          : req.urgency === "urgent"
+                            ? "badge-warning"
+                            : "badge-ghost"
+                      }`}
+                    >
+                      {req.urgency ? req.urgency.charAt(0).toUpperCase() + req.urgency.slice(1) : "Normal"}
+                    </span>
+                  </div>
+
+                  <h3 className="text-lg font-semibold text-gray-800 mb-1 text-left">
+                    {req.hospitalName || "Hospital not specified"}
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-1 text-left">
+                    📍 {req.hospitalLocation || "Location not specified"}
+                  </p>
+                  <p className="text-sm text-gray-600 text-left">🏥 District: {req.district || "N/A"}</p>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                    <span>
+                      Requested by {req.requesterName || "Anonymous"}
+                    </span>
+                    {req.createdAt && (
+                      <span className="before:content-['•'] before:mx-2">
+                        {new Date(req.createdAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

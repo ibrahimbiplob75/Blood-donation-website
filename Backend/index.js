@@ -4,6 +4,7 @@ const { setupMiddleware } = require('./config/config');
 const { connectToDatabase, isConnectionReady } = require('./config/database');
 const { checkAndUpdateActiveDonar } = require('./utils/helpers');
 const { startAvailabilityScheduler } = require('./utils/updateAvailabilityScheduler');
+const { initializeBlacklistService } = require('./services/tokenBlacklistService');
 require('dotenv').config();
 
 const adminRoutes = require('./routes/admin');
@@ -110,6 +111,10 @@ async function startServer() {
     }
     
     await connectToDatabase();
+    
+    // Initialize token blacklist service
+    initializeBlacklistService();
+    
     startAvailabilityScheduler();
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

@@ -4,6 +4,7 @@ import useAxios from "../../Hooks/useAxios.js";
 import { useUserRole } from "../../Hooks/useAuthQuery.js";
 import { AuthProvider } from "../../context/ContextProvider.jsx";
 import { getAuth } from "firebase/auth";
+import AxiosPublic from "../../context/AxiosPublic.jsx";
 
 const UserManagement = () => {
   const { user: userData, isLoading: userLoading } = useUserRole();
@@ -181,6 +182,8 @@ const UserManagement = () => {
     e.preventDefault();
     if (!validateForm()) return;
 
+    setLoading(true);
+
     try {
       const dataToSend = {
         name: formData.name.trim(),
@@ -195,6 +198,7 @@ const UserManagement = () => {
       };
 
       if (editId) {
+        // Update existing user
         if (formData.password && formData.password.trim()) {
           dataToSend.password = formData.password;
         }
@@ -207,9 +211,13 @@ const UserManagement = () => {
           timer: 1500,
         });
       } else {
-        // New user creation: require password (validated already)
+        // New user creation: Backend will handle Firebase user creation via Admin SDK
+        // This prevents logging out the current admin
         dataToSend.password = formData.password;
+        dataToSend.createInFirebase = true; // Flag to tell backend to create Firebase user
+        
         await Axios.post("/users", dataToSend);
+        
         Swal.fire({
           position: "top-end",
           icon: "success",
@@ -222,11 +230,14 @@ const UserManagement = () => {
       handleCloseModal();
       fetchUsers();
     } catch (error) {
+      console.error("User operation error:", error);
       Swal.fire({
         icon: "error",
         title: editId ? "Failed to update user" : "Failed to add user",
-        text: error.response?.data?.message || "Server error",
+        text: error.message || error.response?.data?.message || "Server error",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
