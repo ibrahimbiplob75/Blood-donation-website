@@ -1,7 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { ObjectId } = require('mongodb');
 const { getCollections } = require('../config/database');
-const admin = require('../config/firebase.admin');
 
 
 const getUsers = async (req, res) => {
@@ -55,29 +54,6 @@ const createUser = async (req, res) => {
       const saltRounds = 12;
       hashedPassword = await bcrypt.hash(password, saltRounds);
     }
-    // Create user in Firebase Auth (Admin SDK) if password provided
-    let firebaseUid = null;
-    if (password && password.trim()) {
-      try {
-        const userRecord = await admin.auth().createUser({
-          email: email.trim().toLowerCase(),
-          password: password,
-          displayName: name ? name.trim() : undefined,
-          emailVerified: false,
-          disabled: false,
-        });
-        firebaseUid = userRecord.uid;
-      } catch (firebaseError) {
-        // Handle known Firebase errors
-        if (firebaseError?.code === 'auth/email-already-exists') {
-          return res.status(409).json({ message: 'Email already exists in Firebase' });
-        }
-        return res.status(500).json({ 
-          message: 'Failed to create Firebase user',
-          error: firebaseError.message 
-        });
-      }
-    }
 
     const newUser = {
       Name: name ? name.trim() : '',
@@ -90,30 +66,12 @@ const createUser = async (req, res) => {
       bloodGroup: bloodGroup || '',
       district: district || '',
       password: hashedPassword,
-      firebaseUid: firebaseUid || null,
-      donorApprovalStatus: 'pending', // New donors need admin approval
+      donorApprovalStatus: 'pending',
       createdAt: new Date(),
       updatedAt: new Date()
     };
-    
-    let result;
-    try {
-      result = await usersCollection.insertOne(newUser);
-    } catch (mongoError) {
-      // Roll back Firebase user creation if Mongo insert fails
-      if (firebaseUid) {
-        try {
-          await admin.auth().deleteUser(firebaseUid);
-        } catch (rollbackError) {
-          // Log rollback failure but continue returning error
-          console.error('Rollback failed: could not delete Firebase user', rollbackError);
-        }
-      }
-      return res.status(500).json({ 
-        message: 'Failed to create user in database',
-        error: mongoError.message 
-      });
-    }
+
+    const result = await usersCollection.insertOne(newUser);
     
     const createdUser = await usersCollection.findOne(
       { _id: result.insertedId },
@@ -177,7 +135,7 @@ const updateUser = async (req, res) => {
       const saltRounds = 12;
       updateData.password = await bcrypt.hash(password, saltRounds);
     }
-    
+
     await usersCollection.updateOne(
       { _id: new ObjectId(id) },
       { $set: updateData }
@@ -196,34 +154,6 @@ const updateUser = async (req, res) => {
     console.error('Update user error:', error);
     res.status(500).json({ 
       message: 'Failed to update user',
-      error: error.message 
-    });
-  }
-};
-
-const deleteFirebaseUser = async (req, res) => {
-  try {
-    const { email } = req.body;
-    
-    if (!email) {
-      return res.status(400).json({ message: 'Email is required' });
-    }
-
-    try {
-      const userRecord = await admin.auth().getUserByEmail(email);
-      await admin.auth().deleteUser(userRecord.uid);
-    } catch (firebaseError) {
-      // User might not exist in Firebase (uploaded via Excel)
-      console.log('Firebase user not found:', email);
-    }
-    
-    res.status(200).json({ 
-      message: 'User deletion processed' 
-    });
-  } catch (error) {
-    console.error('Firebase deletion error:', error);
-    res.status(500).json({ 
-      message: 'Failed to delete Firebase user',
       error: error.message 
     });
   }
@@ -988,7 +918,6 @@ module.exports = {
   createUser,
   updateUser,
   deleteUser,
-  deleteFirebaseUser,
   getUserProfile,
   updateUserProfile,
   getDonationHistory,

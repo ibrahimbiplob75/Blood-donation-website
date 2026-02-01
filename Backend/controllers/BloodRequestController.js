@@ -7,6 +7,7 @@ const { getCollections } = require('../config/database');
 const createBloodRequest = async (req, res) => {
   try {
     const {
+      name,
       bloodGroup,
       hospitalName,
       hospitalLocation,
@@ -28,6 +29,7 @@ const createBloodRequest = async (req, res) => {
     const { bloodRequestsCollection, usersCollection } = getCollections();
 
     const newRequest = {
+      name: name ? name.trim() : '',
       bloodGroup: bloodGroup.trim(),
       hospitalName: hospitalName.trim(),
       hospitalLocation: hospitalLocation.trim(),

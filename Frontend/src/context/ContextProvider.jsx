@@ -1,96 +1,66 @@
 import { createContext, useEffect, useState } from "react";
-import {
-  createUserWithEmailAndPassword,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signOut,
-  updateProfile,
-  GoogleAuthProvider,
-  deleteUser,
-  signInWithPopup,
-} from "firebase/auth";
-import { auth } from "../Firebase/firebase";
+import { useQueryClient } from "@tanstack/react-query";
 import AxiosPublic from "../context/AxiosPublic.jsx";
-import { 
-  clearAllTokens, 
-  setAdminToken, 
-  setUserToken, 
-  getAdminToken,
+import {
+  clearAllTokens,
   hasAdminToken,
+  hasUserToken,
   setUserData,
-  getUserData 
 } from "../utils/tokenManager.js";
-import { 
-  performCrossDomainLogout,
+import {
+  performLogout,
   initializeAuthListeners,
-  clearFirebaseIndexedDB 
 } from "../utils/crossDomainAuth.js";
 
 export const AuthProvider = createContext(null);
 
 const ContextProvider = ({ children }) => {
   const [publicAxios] = AxiosPublic();
+  const queryClient = useQueryClient();
   const [user, setUser] = useState(null);
   const [loader, setLoading] = useState(true);
   const [userRole, setUserRole] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const googleProvider = new GoogleAuthProvider();
-
-  // Firebase Auth Methods
-  const createUser = (email, password) => {
-    setLoading(true);
-    return createUserWithEmailAndPassword(auth, email, password);
-  };
-
-  const signIn = (email, password) => {
-    setLoading(true);
-    return signInWithEmailAndPassword(auth, email, password);
-  };
-
-  const GmailLogin = () => {
-    setLoading(true);
-    return signInWithPopup(auth, googleProvider);
-  };
-
-  const updateUserProfile = (name, phone) => {
-    return updateProfile(auth.currentUser, {
-      displayName: name,
-      phoneNumber: phone,
-    });
-  };
-
-  const DeleteUser = () => {
-    return deleteUser(user);
-  };
 
   const LogOut = async () => {
     try {
-      // Perform cross-domain logout with backend API call
-      const backendLogoutFn = async () => {
-        if (hasAdminToken()) {
-          await publicAxios.post("/admin/logout", {}, { withCredentials: true });
-        }
-      };
-      
-      // Execute comprehensive cross-domain logout
-      await performCrossDomainLogout(backendLogoutFn);
+      // 1. Capture admin token status BEFORE clearing anything
+      const wasAdmin = hasAdminToken();
 
-      // Reset all state
+      // 2. Immediately clear all tokens from localStorage
+      clearAllTokens();
+
+      // 3. Clear React Query cache so no stale auth data remains
+      queryClient.clear();
+
+      // 4. Immediately clear React state so UI redirects right away
       setIsAdmin(false);
       setUserRole(null);
       setUser(null);
-      
+
+      // 5. Perform backend logout (clear cookie, blacklist token)
+      const backendLogoutFn = async () => {
+        if (wasAdmin) {
+          await publicAxios.post("/admin/logout", {}, { withCredentials: true });
+        } else {
+          await publicAxios.post("/logout", {}, { withCredentials: true });
+        }
+      };
+
+      // 6. Execute logout (backend + cross-tab broadcast)
+      await performLogout(backendLogoutFn);
+
       return { success: true };
     } catch (error) {
       console.error("Logout error:", error);
-      
+
       // Force clear even on error
       clearAllTokens();
-      await clearFirebaseIndexedDB();
+      queryClient.clear();
       setIsAdmin(false);
       setUserRole(null);
       setUser(null);
-      
+
       return { success: false, error };
     }
   };
@@ -98,7 +68,7 @@ const ContextProvider = ({ children }) => {
   // Check admin session on mount and after login
   const checkAdminSession = async () => {
     try {
-      const response = await publicAxios.get("/admin/verify-token", {
+      const response = await publicAxios.get("/verify-token", {
         withCredentials: true,
       });
 
@@ -110,131 +80,72 @@ const ContextProvider = ({ children }) => {
           role: response.data.user.role,
           avatar: response.data.user.avatar || null,
         };
-        
+
         // Store user data in localStorage
         setUserData(userData);
-        
-        setIsAdmin(true);
-        setUserRole(response.data.user.role);
+
+        const role = response.data.user.role;
+        const adminRoles = ['admin', 'Admin', 'moderator', 'Moderator', 'executive', 'Executive'];
+        setIsAdmin(adminRoles.includes(role));
+        setUserRole(role);
         setUser({
           email: response.data.user.email,
           displayName: response.data.user.name || response.data.user.Name,
           uid: response.data.user._id,
-          isAdmin: true,
+          isAdmin: adminRoles.includes(role),
         });
         return true;
       } else {
         // If not authenticated, ensure state is cleared
         setIsAdmin(false);
         setUserRole(null);
+        setUser(null);
         return false;
       }
     } catch (error) {
-      console.error('Admin session check failed:', error);
+      console.error('Session check failed:', error);
       setIsAdmin(false);
       setUserRole(null);
+      setUser(null);
       return false;
     }
   };
 
-  // Auth State Observer
+  // Auth State Initialization - check JWT token on mount
   useEffect(() => {
     const initAuth = async () => {
       setLoading(true);
 
-      // First check if admin token exists
-      if (hasAdminToken()) {
-        const hasAdminSession = await checkAdminSession();
-        
-        if (hasAdminSession) {
-          setLoading(false);
-          return;
-        } else {
-          // Admin token exists but invalid, clear it
+      // Check if any token exists
+      if (hasAdminToken() || hasUserToken()) {
+        const hasSession = await checkAdminSession();
+
+        if (!hasSession) {
+          // Token exists but invalid, clear it
           clearAllTokens();
         }
       }
 
-      // If no valid admin session, check Firebase
-      const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-        try {
-          if (currentUser && currentUser.email) {
-            setUser(currentUser);
-            setIsAdmin(false);
-
-            try {
-              // Get JWT token
-              const userInfo = { email: currentUser.email };
-              const res = await publicAxios.post("/jwt", userInfo);
-
-              if (res?.data?.token) {
-                const userData = {
-                  id: currentUser.uid,
-                  name: currentUser.displayName,
-                  email: currentUser.email,
-                  role: "user",
-                  avatar: currentUser.photoURL || null,
-                };
-                setUserToken(res.data.token, userData);
-              }
-
-              // Fetch user role - IMPORTANT: This must complete before setting loading to false
-              const userRes = await publicAxios.get(
-                `/users?email=${currentUser.email}`
-              );
-              
-              if (userRes?.data?.[0]) {
-                const userRole = userRes.data[0].role || "user";
-                const userData = {
-                  id: currentUser.uid,
-                  name: currentUser.displayName,
-                  email: currentUser.email,
-                  role: userRole,
-                  avatar: currentUser.photoURL || null,
-                };
-                // Persist user data with correct role
-                setUserData(userData);
-                setUserRole(userRole);
-              } else {
-                setUserRole("user");
-              }
-            } catch (error) {
-              console.error("Error fetching user data:", error);
-              clearAllTokens();
-              setUserRole("user");
-            }
-          } else {
-            // No user logged in
-            setUser(null);
-            clearAllTokens();
-            setUserRole(null);
-            setIsAdmin(false);
-          }
-        } finally {
-          // Always set loading to false when auth state change is complete
-          setLoading(false);
-        }
-      });
-
-      return () => unsubscribe();
+      setLoading(false);
     };
 
     initAuth();
-  }, [publicAxios]);
-  
-  // Setup cross-tab and cross-domain logout listener
+  }, []);
+
+  // Setup cross-tab logout listener
   useEffect(() => {
     const handleCrossTabLogout = () => {
-      // Clear local state when logout is triggered from another tab/domain
+      // Clear local state when logout is triggered from another tab
       setUser(null);
       setIsAdmin(false);
       setUserRole(null);
       clearAllTokens();
+      queryClient.clear();
     };
-    
+
     // Initialize cross-tab logout listener
     const cleanupListener = initializeAuthListeners(handleCrossTabLogout);
-    
+
     return () => {
       if (cleanupListener) {
         cleanupListener();
@@ -247,12 +158,7 @@ const ContextProvider = ({ children }) => {
     loader,
     userRole,
     isAdmin,
-    createUser,
-    signIn,
     LogOut,
-    updateUserProfile,
-    GmailLogin,
-    DeleteUser,
     checkAdminSession,
   };
 

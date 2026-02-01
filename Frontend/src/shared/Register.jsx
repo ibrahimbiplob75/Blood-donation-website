@@ -1,12 +1,10 @@
-import { useContext, useState } from "react";
+import { useState } from "react";
 import { Helmet } from "react-helmet";
 import { Link, useNavigate } from "react-router-dom";
-import { AuthProvider } from "../context/ContextProvider.jsx";
 import Swal from "sweetalert2";
 import { useForm } from "react-hook-form";
 import { motion } from "framer-motion";
 import bloodLogo from "/assets/images/1142143.png";
-import { FcGoogle } from "react-icons/fc";
 import AxiosPublic from "../context/AxiosPublic.jsx";
 
 const Register = () => {
@@ -17,8 +15,6 @@ const Register = () => {
     formState: { errors },
   } = useForm();
 
-  const { createUser, updateUserProfile, GmailLogin } =
-    useContext(AuthProvider);
   const navigate = useNavigate();
   const [publicAxios] = AxiosPublic();
   const [loading, setLoading] = useState(false);
@@ -95,10 +91,6 @@ const Register = () => {
     setLoading(true);
 
     try {
-      await createUser(data.email, data.password);
-
-      await updateUserProfile(data.name, data.phone);
-
       const userInfo = {
         name: data.name,
         email: data.email,
@@ -121,7 +113,7 @@ const Register = () => {
           showConfirmButton: false,
           timer: 1500,
         });
-        navigate("/");
+        navigate("/login");
       }
     } catch (error) {
       console.error("Registration error:", error);
@@ -132,40 +124,6 @@ const Register = () => {
       });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleGoogleRegister = async () => {
-    try {
-      const result = await GmailLogin();
-      const user = result.user;
-
-      const userInfo = {
-        name: user.displayName,
-        email: user.email,
-        phone: "",
-        lastDonateDate: "",
-        bloodGroup: "",
-        district: "",
-        role: "user",
-      };
-
-      await publicAxios.post("/users", userInfo);
-
-      Swal.fire({
-        position: "top-end",
-        icon: "success",
-        title: "Account created successfully!",
-        showConfirmButton: false,
-        timer: 1500,
-      });
-      navigate("/");
-    } catch (error) {
-      console.error("Google registration error:", error);
-      Swal.fire({
-        icon: "error",
-        title: "Google registration failed",
-      });
     }
   };
 
@@ -338,24 +296,6 @@ const Register = () => {
               </button>
             </div>
           </form>
-
-          {/* Google Register */}
-          <div className="flex items-center justify-center mt-5">
-            <div className="w-full border-t border-gray-300"></div>
-            <span className="px-3 text-gray-500 text-sm">অথবা</span>
-            <div className="w-full border-t border-gray-300"></div>
-          </div>
-
-          <button
-            onClick={handleGoogleRegister}
-            type="button"
-            className="mt-4 w-full flex items-center justify-center gap-3 py-3 border border-gray-300 rounded-lg hover:bg-gray-100 transition-all"
-          >
-            <FcGoogle size={24} />
-            <span className="font-medium">
-              Google দিয়ে রেজিস্টার করুন
-            </span>
-          </button>
 
           {/* Login Redirect */}
           <p className="text-center text-gray-700 mt-6">

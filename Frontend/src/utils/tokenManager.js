@@ -22,18 +22,6 @@ export const clearAllTokens = () => {
   // Clear legacy token keys for backward compatibility
   localStorage.removeItem('AccessToken');
   localStorage.removeItem('token');
-  
-  // Clear all Firebase-related localStorage items
-  Object.keys(localStorage).forEach(key => {
-    if (key.startsWith('firebase:')) {
-      localStorage.removeItem(key);
-    }
-  });
-  
-  // Clear sessionStorage
-  Object.keys(sessionStorage).forEach(key => {
-    sessionStorage.removeItem(key);
-  });
 };
 
 /**

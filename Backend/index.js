@@ -9,14 +9,12 @@ require('dotenv').config();
 
 const adminRoutes = require('./routes/admin');
 const userRoutes = require('./routes/user');
-const authRoutes = require('./routes/Authroutes');
 const bloodRequestRoutes = require('./routes/Bloodrequest');
 const bloodStockRoutes = require('./routes/bloodStockRoutes');
 const donationRequestRoutes = require('./routes/donationRequest');
 const donorRoutes = require('./routes/donor');
 
-const { loginAdmin, verifyAdminToken } = require('./services/authService');
-const { generateToken } = require('./middleware/auth');
+const { loginAdmin, logoutAdmin, verifyAdminToken } = require('./services/authService');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -45,33 +43,14 @@ app.get('/csrf-token', csrfProtection, (req, res) => {
 });
 
 
+app.post('/login', csrfProtection, loginAdmin);
 app.post('/admin/login', csrfProtection, loginAdmin);
 
-app.post('/jwt', async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email is required' });
-    const token = generateToken({
-      authenticated: true,
-      user: true,
-      email: email.trim().toLowerCase(),
-    });
-
-    return res.json({ token });
-  } catch (error) {
-    console.error('Error issuing JWT for user:', error);
-    return res.status(500).json({ error: 'Failed to create token' });
-  }
-});
-
-
+app.get('/verify-token', verifyAdminToken);
 app.get('/admin/verify-token', verifyAdminToken);
 
-app.post('/admin/logout', (req, res) => {
-  res.clearCookie('AccessToken');
-  res.clearCookie('adminToken');
-  res.json({ success: true, message: "Logged out successfully" });
-});
+app.post('/logout', logoutAdmin);
+app.post('/admin/logout', logoutAdmin);
 
 app.use('/', adminRoutes);
 app.use('/', userRoutes);

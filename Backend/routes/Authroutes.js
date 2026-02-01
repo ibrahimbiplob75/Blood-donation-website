@@ -1,19 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const {
-  generateUserJWT,
   loginAdmin,
   logoutAdmin,
   verifyAdminToken,
   getCSRFToken
 } = require('../services/authService');
 
-// User Authentication (Firebase-based)
-router.post('/jwt', generateUserJWT);
-
-// Admin Authentication (Database-based with password)
+// Authentication (Database-based with password)
+router.post('/login', loginAdmin);
 router.post('/admin/login', loginAdmin);
+router.post('/logout', logoutAdmin);
 router.post('/admin/logout', logoutAdmin);
+router.get('/verify-token', verifyAdminToken);
 router.get('/admin/verify-token', verifyAdminToken);
 
 // CSRF Token

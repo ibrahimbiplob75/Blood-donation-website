@@ -99,6 +99,7 @@ const RequestModal = ({ isOpen, onClose }) => {
 
     try {
       const requestData = {
+        name: data.name,
         bloodGroup: data.bloodGroup,
         hospitalName: data.hospitalName,
         hospitalLocation: data.hospitalLocation,
@@ -167,6 +168,27 @@ const RequestModal = ({ isOpen, onClose }) => {
         {/* Form */}
         <form onSubmit={handleSubmit(onSubmit)} className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Urgency */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text font-semibold">
+                  Patient Name <span className="text-red-600">*</span>
+                </span>
+              </label>
+              <input
+                type="text"
+                {...register("name", { required: true })}
+                className="input input-bordered w-full"
+                placeholder="Please write patient name"
+              >
+                
+              </input>
+              {errors.name && (
+                <span className="text-red-600 text-sm mt-1">
+                  Patient name is required
+                </span>
+              )}
+            </div>
             {/* Blood Group */}
             <div className="form-control">
               <label className="label">
@@ -192,28 +214,7 @@ const RequestModal = ({ isOpen, onClose }) => {
               )}
             </div>
 
-            {/* Urgency */}
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text font-semibold">
-                  Urgency Level <span className="text-red-600">*</span>
-                </span>
-              </label>
-              <select
-                {...register("urgency", { required: true })}
-                className="select select-bordered w-full"
-              >
-                <option value="">Select Urgency</option>
-                <option value="emergency">Emergency (Within 24 hours)</option>
-                <option value="urgent">Urgent (Within 3 days)</option>
-                <option value="normal">Normal (Within a week)</option>
-              </select>
-              {errors.urgency && (
-                <span className="text-red-600 text-sm mt-1">
-                  Urgency level is required
-                </span>
-              )}
-            </div>
+            
 
             {/* Hospital Name */}
             <div className="form-control md:col-span-2">
@@ -301,6 +302,29 @@ const RequestModal = ({ isOpen, onClose }) => {
                   Valid phone number is required
                 </span>
               )}
+
+             
+            </div>
+             <div className="form-control">
+              <label className="label">
+                <span className="label-text font-semibold">
+                  Urgency Level <span className="text-red-600">*</span>
+                </span>
+              </label>
+              <select
+                {...register("urgency", { required: true })}
+                className="select select-bordered w-full"
+              >
+                <option value="">Select Urgency</option>
+                <option value="emergency">Emergency (Within 24 hours)</option>
+                <option value="urgent">Urgent (Within 3 days)</option>
+                <option value="normal">Normal (Within a week)</option>
+              </select>
+              {errors.urgency && (
+                <span className="text-red-600 text-sm mt-1">
+                  Urgency level is required
+                </span>
+              )}
             </div>
 
             {/* Requester Name (if not logged in) */}
@@ -329,12 +353,12 @@ const RequestModal = ({ isOpen, onClose }) => {
             <div className="form-control md:col-span-2">
               <label className="label">
                 <span className="label-text font-semibold">
-                  Reason for Blood <span className="text-red-600">*</span>
+                  Reason to Blood/Medical Condition <span className="text-red-600">*</span>
                 </span>
               </label>
               <textarea
                 {...register("reason", { required: true, minLength: 10 })}
-                placeholder="Briefly describe why you need blood (e.g., surgery, accident, treatment)"
+                placeholder="Detailed description why you need blood (It will increase chances of approval)"
                 className="textarea textarea-bordered w-full h-24"
               />
               {errors.reason && (

@@ -23,7 +23,7 @@ import { baseURL } from "../Hooks/useAxios";
 import Swal from "sweetalert2";
 
 const UserProfile = () => {
-  const { user } = useContext(AuthProvider);
+  const { user, loader } = useContext(AuthProvider);
   const [profile, setProfile] = useState(null);
   const [statistics, setStatistics] = useState(null);
   const [donationHistory, setDonationHistory] = useState([]);
@@ -110,12 +110,15 @@ const UserProfile = () => {
   ];
 
   useEffect(() => {
+    if (loader) return;
     if (user?.email) {
       fetchUserProfile(user.email);
+    } else {
+      setLoading(false);
     }
-  }, [user]);
+  }, [user, loader]);
 
-  const fetchUserProfile = async (email) => {
+  const fetchUserProfile = async (email, retry = true) => {
     try {
       setLoading(true);
       const response = await fetch(`${baseURL}/profile?email=${encodeURIComponent(email)}`, {
@@ -144,6 +147,9 @@ const UserProfile = () => {
           bloodGroup: data.profile.bloodGroup,
           lastDonateDate: data.profile.lastDonateDate || "",
         });
+      } else if (retry) {
+        setTimeout(() => fetchUserProfile(email, false), 1500);
+        return;
       } else {
         Swal.fire({
           icon: "error",
@@ -153,6 +159,10 @@ const UserProfile = () => {
       }
     } catch (error) {
       console.error("Error fetching profile:", error);
+      if (retry) {
+        setTimeout(() => fetchUserProfile(email, false), 1500);
+        return;
+      }
     } finally {
       setLoading(false);
     }

@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const { getCollections } = require('../config/database');
 const constants = require('../utils/constants');
 const {  ObjectId } = require('mongodb');
+const { isTokenBlacklisted } = require('../services/tokenBlacklistService');
 
 const generateToken = (payload) => {
   return jwt.sign(payload, constants.JWT_SECRET, { expiresIn: 60 * 60 * 8 });
@@ -16,11 +17,10 @@ const verifyToken = (token) => {
 const verifyAdmin = async (req, res, next) => {
   try {
     let token = null;
-    
+
     if (req.cookies?.adminToken) {
       token = req.cookies.adminToken;
     }
-    
 
     if (!token && req.headers?.authorization) {
       const parts = req.headers.authorization.split(' ');
@@ -28,28 +28,29 @@ const verifyAdmin = async (req, res, next) => {
         token = parts[1];
       }
     }
-    
+
     // Then query param
     if (!token && req.query?.token) {
       token = req.query.token;
     }
 
-    console.log('verifyAdmin - token found:', !!token);
-
     if (!token) {
-      console.warn('verifyAdmin: no token provided');
       return res.status(403).json({ error: 'Access denied - no token' });
     }
 
+    // Check if token has been blacklisted (logged out)
+    const blacklisted = await isTokenBlacklisted(token);
+    if (blacklisted) {
+      return res.status(401).json({ error: 'Token has been revoked' });
+    }
+
     const decoded = verifyToken(token);
-    console.log('verifyAdmin - decoded:', decoded);
-    
+
     if (decoded && decoded.admin) {
       req.admin = decoded;
       return next();
     }
 
-    console.warn('verifyAdmin: token invalid or not admin');
     return res.status(403).json({ error: 'Access denied - invalid token' });
   } catch (err) {
     console.error('verifyAdmin error:', err);

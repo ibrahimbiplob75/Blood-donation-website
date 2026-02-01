@@ -1,11 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import useAxios from './useAxios.js';
-import { getUserData, setUserData, clearAllTokens } from '../utils/tokenManager.js';
+import { getUserData, setUserData, clearAllTokens, hasAdminToken, hasUserToken } from '../utils/tokenManager.js';
 
 /**
  * Hook to verify admin token and get user role
  * Uses Tanstack Query for better caching and state management
- * First checks localStorage, then verifies with server
+ * ALWAYS verifies with server - localStorage is only used as placeholder during loading
  */
 export const useVerifyAdminToken = () => {
   const Axios = useAxios();
@@ -13,45 +13,45 @@ export const useVerifyAdminToken = () => {
   return useQuery({
     queryKey: ['adminAuth'],
     queryFn: async () => {
-      // First try to get user data from localStorage
-      const storedUser = getUserData();
-      
+      // If no tokens exist at all, skip the server call
+      if (!hasAdminToken() && !hasUserToken()) {
+        clearAllTokens();
+        return { authenticated: false, user: null };
+      }
+
       try {
         const response = await Axios.get('/admin/verify-token', {
           withCredentials: true,
         });
-        
+
         // Update localStorage with fresh data from server
         if (response.data.authenticated && response.data.user) {
           setUserData(response.data.user);
         } else {
+          // Server says NOT authenticated - clear everything
           clearAllTokens();
         }
-        
+
         return response.data;
       } catch (error) {
         console.error('Token verification error:', error);
-        // If server verification fails but we have stored user, return it
-        if (storedUser) {
-          return { 
-            authenticated: false, 
-            user: storedUser,
-            fromCache: true 
-          };
-        }
+        // Server verification failed - treat as NOT authenticated
+        clearAllTokens();
         return { authenticated: false, user: null };
       }
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    cacheTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 30 * 1000, // 30 seconds - verify frequently to catch logouts
+    cacheTime: 60 * 1000, // 1 minute
     refetchOnWindowFocus: true,
+    refetchOnMount: true,
     retry: 1,
-    // Use initial data from localStorage
-    initialData: () => {
+    // No initialData - don't blindly trust localStorage
+    // Use placeholderData instead so isLoading stays true until server responds
+    placeholderData: () => {
       const storedUser = getUserData();
-      if (storedUser) {
+      if (storedUser && (hasAdminToken() || hasUserToken())) {
         return {
-          authenticated: true,
+          authenticated: false, // NOT authenticated until server confirms
           user: storedUser,
           fromCache: true
         };
@@ -63,21 +63,21 @@ export const useVerifyAdminToken = () => {
 
 /**
  * Hook to get current user role with caching
- * Prioritizes localStorage for immediate access
+ * Only trusts server-verified authentication status
  */
 export const useUserRole = () => {
-  const { data, isLoading, error } = useVerifyAdminToken();
-  
-  // Also get from localStorage for immediate access
-  const storedUser = getUserData();
-  const user = data?.user || storedUser;
+  const { data, isLoading, isPlaceholderData, error } = useVerifyAdminToken();
+
+  const user = data?.user || null;
+  // Only consider authenticated if server confirmed it (not placeholder data)
+  const authenticated = !isPlaceholderData && data?.authenticated === true;
 
   return {
     role: user?.role || null,
-    isAdmin: user?.role === 'Admin' || user?.role === 'admin' || user?.role === 'executive',
-    authenticated: data?.authenticated || !!storedUser,
+    isAdmin: authenticated && (user?.role === 'Admin' || user?.role === 'admin' || user?.role === 'executive'),
+    authenticated: authenticated,
     user: user,
-    isLoading: isLoading,
+    isLoading: isLoading || isPlaceholderData,
     error,
   };
 };

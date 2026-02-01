@@ -2,14 +2,20 @@ import { Navigate } from "react-router-dom";
 import { useUserRole } from "../Hooks/useAuthQuery.js";
 import { useContext } from "react";
 import { AuthProvider } from "./ContextProvider.jsx";
+import { hasAdminToken, hasUserToken } from "../utils/tokenManager.js";
 import Loader from "../shared/Loader.jsx";
 
 const AdminRoute = ({ children }) => {
   // Get auth context loading state
   const { loader: authLoading } = useContext(AuthProvider);
-  
+
   // Use Tanstack Query for better state management and caching
   const { isAdmin, authenticated, user, isLoading } = useUserRole();
+
+  // Quick check: if no tokens exist at all, redirect immediately
+  if (!hasAdminToken() && !hasUserToken()) {
+    return <Navigate to={"/login"}></Navigate>;
+  }
 
   // Show loader while context is initializing
   if (authLoading || isLoading) {

@@ -2,12 +2,11 @@ const express = require('express');
 const router = express.Router();
 const { verifyAdmin } = require('../middleware/auth');
 const multer = require('multer');
-const { 
-  getUsers, 
-  createUser, 
-  updateUser, 
+const {
+  getUsers,
+  createUser,
+  updateUser,
   deleteUser,
-  deleteFirebaseUser,
   getUserProfile,
   updateUserProfile,
   getDonationHistory,
@@ -34,7 +33,6 @@ router.post('/users', createUser);
 router.get('/users', getUsers);
 router.put('/users/:id',verifyAdmin, updateUser);
 router.delete('/users/:id', verifyAdmin, deleteUser);
-router.post('/delete-firebase-user', verifyAdmin, deleteFirebaseUser);
 
 // Donor approval routes (admin only)
 router.get('/users/admin/pending-donors', verifyAdmin, getPendingDonors);

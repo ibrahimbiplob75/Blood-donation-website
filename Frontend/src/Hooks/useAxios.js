@@ -1,5 +1,5 @@
 import axios from "axios";
-import { getAdminToken, getUserToken } from "../utils/tokenManager.js";
+import { getAdminToken, getUserToken, clearAllTokens } from "../utils/tokenManager.js";
 
 const instance = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
@@ -12,9 +12,9 @@ instance.interceptors.request.use(
       // Check for admin token first, then user token
       const adminToken = getAdminToken();
       const userToken = getUserToken();
-      
+
       const token = adminToken || userToken;
-      
+
       if (token) {
         config.headers = config.headers || {};
         config.headers.Authorization = `Bearer ${token}`;
@@ -33,9 +33,8 @@ instance.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
       // Token expired or invalid, clear tokens
-      const { clearAllTokens } = require("../utils/tokenManager.js");
       clearAllTokens();
-      
+
       // Redirect to login if not already there
       if (!window.location.pathname.includes('/login')) {
         window.location.href = '/login';

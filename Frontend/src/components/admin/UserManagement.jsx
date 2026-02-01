@@ -1,15 +1,9 @@
-import React, { useState, useEffect, useContext } from "react";
+import { useState, useEffect } from "react";
 import Swal from "sweetalert2";
 import useAxios from "../../Hooks/useAxios.js";
-import { useUserRole } from "../../Hooks/useAuthQuery.js";
-import { AuthProvider } from "../../context/ContextProvider.jsx";
-import { getAuth } from "firebase/auth";
-import AxiosPublic from "../../context/AxiosPublic.jsx";
 
 const UserManagement = () => {
-  const { user: userData, isLoading: userLoading } = useUserRole();
   const Axios = useAxios();
-  const { user } = useContext(AuthProvider);
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -168,12 +162,18 @@ const UserManagement = () => {
       }
     }
     // For updates, if password provided ensure minimum length and match
-    if (editId && formData.password && formData.password.length < 6) {
-      Swal.fire({
-        icon: "error",
-        title: "Password must be at least 6 characters",
-      });
-      return false;
+    if (editId && formData.password) {
+      if (formData.password.length < 6) {
+        Swal.fire({
+          icon: "error",
+          title: "Password must be at least 6 characters",
+        });
+        return false;
+      }
+      if (formData.password !== formData.confirmPassword) {
+        Swal.fire({ icon: "error", title: "Passwords do not match" });
+        return false;
+      }
     }
     return true;
   };
@@ -211,11 +211,8 @@ const UserManagement = () => {
           timer: 1500,
         });
       } else {
-        // New user creation: Backend will handle Firebase user creation via Admin SDK
-        // This prevents logging out the current admin
         dataToSend.password = formData.password;
-        dataToSend.createInFirebase = true; // Flag to tell backend to create Firebase user
-        
+
         await Axios.post("/users", dataToSend);
         
         Swal.fire({
@@ -259,11 +256,11 @@ const UserManagement = () => {
     setShowModal(true);
   };
 
-  const handleDelete = async (userId, userEmail) => {
+  const handleDelete = async (userId) => {
     try {
       const result = await Swal.fire({
         title: "Are you sure?",
-        text: "This will delete the user from both database and Firebase!",
+        text: "This will permanently delete the user!",
         icon: "warning",
         showCancelButton: true,
         confirmButtonColor: "#d33",
@@ -272,18 +269,7 @@ const UserManagement = () => {
       });
 
       if (result.isConfirmed) {
-        // Delete from database first
         await Axios.delete(`/users/${userId}`);
-
-        // Note: Firebase Admin SDK is needed on backend to delete users by email
-        // Client-side Firebase can only delete currently authenticated user
-        // Send request to backend to handle Firebase deletion
-        try {
-          await Axios.post("/delete-firebase-user", { email: userEmail });
-        } catch (firebaseError) {
-          console.error("Firebase deletion error:", firebaseError);
-          // Continue even if Firebase deletion fails
-        }
 
         Swal.fire({
           position: "top-end",
@@ -615,7 +601,7 @@ const UserManagement = () => {
                     Edit
                   </button>
                   <button
-                    onClick={() => handleDelete(user._id, user.email)}
+                    onClick={() => handleDelete(user._id)}
                     className="bg-red-500 text-white px-4 py-1 rounded hover:bg-red-600 transition text-sm"
                   >
                     Delete

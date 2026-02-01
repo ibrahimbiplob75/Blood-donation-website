@@ -1,26 +1,34 @@
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect } from "react";
 import { motion } from "framer-motion";
-import { FcGoogle } from "react-icons/fc";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "../context/ContextProvider.jsx";
 import useAxios from "../Hooks/useAxios.js";
 import Swal from "sweetalert2";
 import bloodLogo from "/assets/images/1142143.png";
-import AxiosPublic from "../context/AxiosPublic.jsx";
-import { clearAllTokens, setAdminToken, setUserToken, setUserData } from "../utils/tokenManager.js";
+import { useQueryClient } from "@tanstack/react-query";
+import { clearAllTokens, setAdminToken, setUserToken } from "../utils/tokenManager.js";
 
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signIn, GmailLogin, checkAdminSession } = useContext(AuthProvider);
+  const queryClient = useQueryClient();
+  const { user, loader, checkAdminSession } = useContext(AuthProvider);
   const Axios = useAxios();
-  const [publicAxios] = AxiosPublic();
 
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
+  const [pendingRedirect, setPendingRedirect] = useState(null);
 
-  // Removed isAdminRoute - unified login for all users
+  const from = location.state?.from?.pathname || "/";
+
+  // Navigate once auth context is fully updated after login
+  useEffect(() => {
+    if (pendingRedirect && !loader && user) {
+      navigate(pendingRedirect, { replace: true });
+      setPendingRedirect(null);
+    }
+  }, [user, loader, pendingRedirect, navigate]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -30,97 +38,74 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
 
-    // CRITICAL: Clear all previous tokens before new login
+    // Clear all previous tokens before new login
     clearAllTokens();
 
     try {
-      try {
-        const csrfResponse = await Axios.get("/csrf-token", {
+      const csrfResponse = await Axios.get("/csrf-token", {
+        withCredentials: true,
+      });
+
+      const response = await Axios.post(
+        "/login",
+        {
+          email: formData.email,
+          password: formData.password,
+        },
+        {
           withCredentials: true,
+          headers: {
+            "X-CSRF-Token": csrfResponse.data.csrfToken,
+          },
+        }
+      );
+
+      if (response.data.success) {
+        // Store token based on user role
+        if (response.data.token && response.data.user) {
+          const userRole = response.data.user?.role;
+
+          // Create standardized user data object
+          const userData = {
+            id: response.data.user._id,
+            name: response.data.user.name || response.data.user.Name,
+            email: response.data.user.email,
+            role: response.data.user.role,
+            avatar: response.data.user.avatar || null,
+          };
+
+          if (userRole === 'Admin' || userRole === 'admin' || userRole === 'Moderator' || userRole === 'moderator' || userRole === 'executive' || userRole === 'Executive') {
+            setAdminToken(response.data.token, userData);
+          } else {
+            setUserToken(response.data.token, userData);
+          }
+        }
+
+        const userRole = response.data.user?.role;
+
+        // Update React Query cache so AdminRoute has auth data immediately
+        queryClient.setQueryData(['adminAuth'], {
+          authenticated: true,
+          user: response.data.user,
         });
 
-        const response = await Axios.post(
-          "/admin/login",
-          {
-            email: formData.email,
-            password: formData.password,
-          },
-          {
-            withCredentials: true,
-            headers: {
-              "X-CSRF-Token": csrfResponse.data.csrfToken,
-            },
-          }
-        );
-
-        if (response.data.success) {
-          // Store token based on user role
-          if (response.data.token && response.data.user) {
-            const userRole = response.data.user?.role;
-            
-            // Create standardized user data object
-            const userData = {
-              id: response.data.user._id,
-              name: response.data.user.name || response.data.user.Name,
-              email: response.data.user.email,
-              role: response.data.user.role,
-              avatar: response.data.user.avatar || null,
-            };
-            
-            if (userRole === 'Admin' || userRole === 'admin' || userRole === 'Moderator' || userRole === 'moderator') {
-              setAdminToken(response.data.token, userData);
-            } else {
-              setUserToken(response.data.token, userData);
-            }
-          }
-
-          const userRole = response.data.user?.role;
-          console.log("Logged in user role:", userRole);
-
-          // Update context state immediately after login and wait for it
-          await checkAdminSession();
-          
-          // Add a small delay to ensure auth context is fully updated
-          await new Promise(resolve => setTimeout(resolve, 500));
-
-          Swal.fire({
-            position: "top-end",
-            icon: "success",
-            title: `${
-              userRole === "Admin" ? "Admin" : "User"
-            } login successful!`,
-            showConfirmButton: false,
-            timer: 1500,
-          });
-
-          // Redirect based on role
-          if (userRole === "Admin" || userRole === "admin") {
-            navigate("/admin");
-          } else {
-            navigate("/");
-          }
-          return;
-        }
-      } catch (dbError) {
-        console.log(
-          "Database auth failed, trying Firebase:",
-          dbError.response?.data?.error
-        );
-        
-        // Clear tokens again before Firebase login
-        clearAllTokens();
-        
-        await signIn(formData.email, formData.password);
+        // Update context state
+        await checkAdminSession();
 
         Swal.fire({
           position: "top-end",
           icon: "success",
-          title: "Login successful!",
+          title: `${
+            userRole === "Admin" || userRole === "admin" ? "Admin" : "User"
+          } login successful!`,
           showConfirmButton: false,
           timer: 1500,
         });
 
-        navigate("/");
+        // Redirect based on role
+        const adminRoles = ['Admin', 'admin', 'executive', 'Executive', 'moderator', 'Moderator'];
+        const target = adminRoles.includes(userRole) ? "/admin" : from;
+        setPendingRedirect(target);
       }
     } catch (error) {
       console.error("Login error:", error);
@@ -132,68 +117,6 @@ const Login = () => {
       });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    try {
-      // Clear all tokens before Google login
-      clearAllTokens();
-      
-      const result = await GmailLogin();
-      const user = result.user;
-
-      const userInfo = {
-        name: user.displayName,
-        email: user.email,
-        phone: "",
-        lastDonateDate: "",
-        bloodGroup: "",
-        district: "",
-        role: "user",
-      };
-
-      try {
-        await publicAxios.post("/users", userInfo);
-      } catch (err) {
-        if (err?.response?.status !== 409) {
-          throw err; // only ignore conflict for existing users
-        }
-      }
-
-      try {
-        const jwtRes = await publicAxios.post("/jwt", { email: user.email });
-        if (jwtRes?.data?.token) {
-          const userData = {
-            id: user.uid,
-            name: user.displayName,
-            email: user.email,
-            role: "user",
-            avatar: user.photoURL || null,
-          };
-          setUserToken(jwtRes.data.token, userData);
-        }
-      } catch (err) {
-        console.error("JWT fetch after Google login failed:", err?.response?.data || err.message);
-      }
-
-      Swal.fire({
-        position: "top-end",
-        icon: "success",
-        title: "Logged in with Google!",
-        showConfirmButton: false,
-        timer: 1500,
-      });
-      navigate("/");
-    } catch (error) {
-      console.error("Google registration error:", error?.response?.data || error.message);
-      Swal.fire({
-        icon: "error",
-        title:
-          error?.response?.status === 409
-            ? "Account already exists. Try email login."
-            : "Google registration failed",
-      });
     }
   };
 
@@ -277,24 +200,6 @@ const Login = () => {
           }`}
         >
           {loading ? "প্রসেস হচ্ছে..." : "লগইন"}
-        </button>
-
-        {/* Google Login */}
-        <div className="flex items-center justify-center mt-5">
-          <div className="w-full border-t border-gray-300"></div>
-          <span className="px-3 text-gray-500 text-sm"></span>
-          <div className="w-full border-t border-gray-300"></div>
-        </div>
-
-        <button
-          onClick={handleGoogleLogin}
-          type="button"
-          className="mt-4 w-full flex items-center justify-center gap-3 py-3 border border-gray-300 rounded-lg hover:bg-gray-100 transition-all"
-        >
-          <FcGoogle size={24} />
-          <span className="font-medium">
-            Google দিয়ে লগইন করুন
-          </span>
         </button>
 
         {/* Register Redirect */}

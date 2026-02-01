@@ -8,7 +8,7 @@
 <body>
   <script type="module">
     // This page is loaded in an iframe from other domains to trigger logout
-    
+
     // Clear localStorage
     const keysToRemove = [
       'adminToken',
@@ -16,38 +16,15 @@
       'userData',
       'AccessToken',
       'token',
-      'firebase:authUser',
-      'firebase:host',
     ];
-    
+
     keysToRemove.forEach(key => {
       localStorage.removeItem(key);
     });
-    
-    // Clear all firebase-related items
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('firebase:')) {
-        localStorage.removeItem(key);
-      }
-    });
-    
+
     // Clear sessionStorage
     sessionStorage.clear();
-    
-    // Clear IndexedDB
-    (async () => {
-      try {
-        const databases = await indexedDB.databases();
-        for (const db of databases) {
-          if (db.name && db.name.includes('firebase')) {
-            indexedDB.deleteDatabase(db.name);
-          }
-        }
-      } catch (error) {
-        console.error('Error clearing IndexedDB:', error);
-      }
-    })();
-    
+
     // Signal parent that logout is complete
     if (window.parent !== window) {
       window.parent.postMessage({ type: 'LOGOUT_COMPLETE' }, '*');

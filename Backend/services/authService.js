@@ -27,26 +27,6 @@ const verifyToken = (token) => {
   }
 };
 
-const generateUserJWT = async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ error: 'Email required' });
-    }
-
-    const token = generateToken({ 
-      email: email.trim().toLowerCase(),
-      type: 'user'
-    });
-
-    res.status(200).json({ token });
-  } catch (error) {
-    console.error('JWT generation error:', error);
-    res.status(500).json({ error: 'Failed to generate token' });
-  }
-};
-
 const loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -56,47 +36,52 @@ const loginAdmin = async (req, res) => {
     }
 
     const { usersCollection } = getCollections();
-    const admin = await usersCollection.findOne({
-      email: email.trim().toLowerCase(),
-      role: { $in: ['admin', 'moderator', 'Admin', 'Moderator'] }
+    const user = await usersCollection.findOne({
+      email: email.trim().toLowerCase()
     });
 
-    if (!admin) {
+    if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    
-    const isValidPassword = await bcrypt.compare(password, admin.password);
+
+    if (!user.password) {
+      return res.status(401).json({ error: 'No password set for this account. Please contact admin.' });
+    }
+
+    const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    
-    const adminToken = generateToken({
-      userId: admin._id.toString(),
-      email: admin.email,
-      role: admin.role,
-      admin: true
+
+    const isAdminRole = ['admin', 'moderator', 'Admin', 'Moderator', 'executive', 'Executive'].includes(user.role);
+
+    const token = generateToken({
+      userId: user._id.toString(),
+      email: user.email,
+      role: user.role,
+      admin: isAdminRole
     });
-    
-    res.cookie('adminToken', adminToken, {
+
+    res.cookie('adminToken', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 8 * 60 * 60 * 1000
     });
-    
+
     res.status(200).json({
       success: true,
       authenticated: true,
-      token: adminToken,
+      token: token,
       user: {
-        _id: admin._id,
-        name: admin.Name,
-        email: admin.email,
-        role: admin.role,
+        _id: user._id,
+        name: user.Name,
+        email: user.email,
+        role: user.role,
       }
     });
   } catch (error) {
-    console.error('Admin login error:', error);
+    console.error('Login error:', error);
     res.status(500).json({ error: 'Login failed' });
   }
 };
@@ -179,28 +164,28 @@ const verifyAdminToken = async (req, res) => {
     }
 
     const decoded = verifyToken(token);
-    if (!decoded || !decoded.admin) {
+    if (!decoded || !decoded.userId) {
       return res.status(200).json({ authenticated: false });
     }
 
     const { usersCollection } = getCollections();
-    const admin = await usersCollection.findOne(
+    const user = await usersCollection.findOne(
       { _id: new ObjectId(decoded.userId) },
       { projection: { password: 0 } }
     );
 
-    if (!admin || !['admin', 'executive', 'Admin', 'Executive', 'moderator', 'Moderator'].includes(admin.role)) {
+    if (!user) {
       return res.status(200).json({ authenticated: false });
     }
 
     res.status(200).json({
       authenticated: true,
       user: {
-        _id: admin._id,
-        name: admin.Name,
-        email: admin.email,
-        role: admin.role,
-        subrole: admin.subrole || ''
+        _id: user._id,
+        name: user.Name,
+        email: user.email,
+        role: user.role,
+        subrole: user.subrole || ''
       }
     });
   } catch (error) {
@@ -297,7 +282,6 @@ const verifyAdmin = async (req, res, next) => {
 module.exports = {
   generateToken,
   verifyToken,
-  generateUserJWT,
   loginAdmin,
   logoutAdmin,
   verifyAdminToken,

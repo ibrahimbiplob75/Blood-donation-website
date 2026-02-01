@@ -1,9 +1,15 @@
 import { Navigate } from "react-router-dom";
 import { useUserRole } from "../Hooks/useAuthQuery.js";
+import { hasAdminToken, hasUserToken } from "../utils/tokenManager.js";
 import Loader from "../shared/Loader.jsx";
 
 const ExecutiveRoute = ({ children }) => {
   const { user: userData, authenticated, isLoading } = useUserRole();
+
+  // Quick check: if no tokens exist at all, redirect immediately
+  if (!hasAdminToken() && !hasUserToken()) {
+    return <Navigate to={"/"}></Navigate>;
+  }
 
   if (isLoading) {
     return <Loader></Loader>;
