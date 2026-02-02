@@ -32,4 +32,7 @@ router.get('/admin/donor-history', verifyAdmin, getDonorHistory);
 router.get('/admin/statistics', verifyAdmin, getStatistics);
 router.put('/admin/statistics', verifyAdmin, updateStatistics);
 
+// Public statistics route (for home page - no auth required)
+router.get('/statistics', getStatistics);
+
 module.exports = router;

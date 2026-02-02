@@ -91,20 +91,11 @@ export const useLoginMutation = () => {
 
   return useMutation({
     mutationFn: async ({ email, password }) => {
-      // Get CSRF token first
-      const csrfResponse = await Axios.get('/csrf-token', {
-        withCredentials: true,
-      });
-
-      // Login
       const response = await Axios.post(
         '/admin/login',
         { email, password },
         {
           withCredentials: true,
-          headers: {
-            'X-CSRF-Token': csrfResponse.data.csrfToken,
-          },
         }
       );
 

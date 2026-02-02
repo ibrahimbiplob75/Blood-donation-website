@@ -31,11 +31,14 @@ instance.interceptors.request.use(
 instance.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      // Token expired or invalid, clear tokens
+    // Only auto-redirect for token expiration on authenticated routes
+    // Skip for login/register/public endpoints to avoid masking real errors
+    const url = error.config?.url || '';
+    const isAuthEndpoint = url.includes('/login') || url.includes('/register') || url.includes('/users');
+
+    if ((error.response?.status === 401 || error.response?.status === 403) && !isAuthEndpoint) {
       clearAllTokens();
 
-      // Redirect to login if not already there
       if (!window.location.pathname.includes('/login')) {
         window.location.href = '/login';
       }

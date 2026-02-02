@@ -17,6 +17,8 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  Edit,
+  Trash2,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { baseURL } from "../../Hooks/useAxios.js";
@@ -27,6 +29,7 @@ const BloodStock = () => {
   const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
+  const [editingTransaction, setEditingTransaction] = useState(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -435,6 +438,160 @@ const BloodStock = () => {
       fromBloodGroup: "A+",
       toBloodGroup: "B+",
     });
+  };
+
+  const handleEditTransaction = async (transaction) => {
+    const { value: formValues } = await Swal.fire({
+      title: 'Edit Transaction',
+      html: `
+        <div class="space-y-4">
+          <div>
+            <label class="block text-left font-semibold mb-1">Units</label>
+            <input id="edit-units" type="number" value="${transaction.units}" min="1" class="swal2-input" />
+          </div>
+          ${transaction.donorName ? `
+          <div>
+            <label class="block text-left font-semibold mb-1">Donor Name</label>
+            <input id="edit-donorName" type="text" value="${transaction.donorName || ''}" class="swal2-input" />
+          </div>
+          <div>
+            <label class="block text-left font-semibold mb-1">Donor Phone</label>
+            <input id="edit-donorPhone" type="text" value="${transaction.donorPhone || ''}" class="swal2-input" />
+          </div>
+          ` : ''}
+          ${transaction.receiverName ? `
+          <div>
+            <label class="block text-left font-semibold mb-1">Receiver Name</label>
+            <input id="edit-receiverName" type="text" value="${transaction.receiverName || ''}" class="swal2-input" />
+          </div>
+          <div>
+            <label class="block text-left font-semibold mb-1">Receiver Phone</label>
+            <input id="edit-receiverPhone" type="text" value="${transaction.receiverPhone || ''}" class="swal2-input" />
+          </div>
+          ` : ''}
+          ${transaction.hospitalName ? `
+          <div>
+            <label class="block text-left font-semibold mb-1">Hospital Name</label>
+            <input id="edit-hospitalName" type="text" value="${transaction.hospitalName || ''}" class="swal2-input" />
+          </div>
+          ` : ''}
+          ${transaction.patientId ? `
+          <div>
+            <label class="block text-left font-semibold mb-1">Patient ID</label>
+            <input id="edit-patientId" type="text" value="${transaction.patientId || ''}" class="swal2-input" />
+          </div>
+          ` : ''}
+          <div>
+            <label class="block text-left font-semibold mb-1">Notes</label>
+            <textarea id="edit-notes" class="swal2-textarea">${transaction.notes || ''}</textarea>
+          </div>
+        </div>
+      `,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: 'Update',
+      preConfirm: () => {
+        const newUnits = parseInt(document.getElementById('edit-units').value);
+        return {
+          units: newUnits,
+          donorName: document.getElementById('edit-donorName')?.value || transaction.donorName,
+          donorPhone: document.getElementById('edit-donorPhone')?.value || transaction.donorPhone,
+          receiverName: document.getElementById('edit-receiverName')?.value || transaction.receiverName,
+          receiverPhone: document.getElementById('edit-receiverPhone')?.value || transaction.receiverPhone,
+          hospitalName: document.getElementById('edit-hospitalName')?.value || transaction.hospitalName,
+          patientId: document.getElementById('edit-patientId')?.value || transaction.patientId,
+          notes: document.getElementById('edit-notes')?.value || transaction.notes,
+        };
+      }
+    });
+
+    if (formValues) {
+      try {
+        const response = await fetch(`${baseURL}/admin/blood-transactions/${transaction._id}`, {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formValues),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          Swal.fire({
+            icon: 'success',
+            title: 'Transaction Updated',
+            text: 'Stock has been adjusted accordingly',
+          });
+          fetchStockData();
+          fetchTransactions();
+        } else {
+          Swal.fire({
+            icon: 'error',
+            title: 'Update Failed',
+            text: data.message || 'Failed to update transaction',
+          });
+        }
+      } catch (error) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Failed to connect to server',
+        });
+      }
+    }
+  };
+
+  const handleDeleteTransaction = async (transaction) => {
+    const result = await Swal.fire({
+      title: 'Delete Transaction?',
+      html: `
+        <div class="text-left space-y-2">
+          <p><strong>Type:</strong> ${transaction.type}</p>
+          <p><strong>Blood Group:</strong> ${transaction.type === 'exchange' ? `${transaction.fromBloodGroup} → ${transaction.toBloodGroup}` : transaction.bloodGroup}</p>
+          <p><strong>Units:</strong> ${transaction.units}</p>
+          <p class="text-sm text-gray-600 mt-2">The stock will be restored after deletion.</p>
+        </div>
+      `,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, delete it',
+      confirmButtonColor: '#dc2626',
+      cancelButtonText: 'Cancel',
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const response = await fetch(`${baseURL}/admin/blood-transactions/${transaction._id}`, {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          Swal.fire({
+            icon: 'success',
+            title: 'Transaction Deleted',
+            text: 'Stock has been restored',
+          });
+          fetchStockData();
+          fetchTransactions();
+        } else {
+          Swal.fire({
+            icon: 'error',
+            title: 'Delete Failed',
+            text: data.message || 'Failed to delete transaction',
+          });
+        }
+      } catch (error) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Failed to connect to server',
+        });
+      }
+    }
   };
 
   const exportToCSV = () => {
@@ -1278,12 +1435,13 @@ const BloodStock = () => {
                   <th className="text-xs md:text-sm">Details</th>
                   <th className="text-xs md:text-sm">Date</th>
                   <th className="text-xs md:text-sm">Stock Change</th>
+                  <th className="text-xs md:text-sm">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {paginatedTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="text-center py-8 text-gray-500">
+                    <td colSpan="7" className="text-center py-8 text-gray-500">
                       No transactions found
                     </td>
                   </tr>
@@ -1367,6 +1525,24 @@ const BloodStock = () => {
                               </div>
                             </div>
                           )}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleEditTransaction(transaction)}
+                            className="btn btn-xs btn-outline btn-info"
+                            title="Edit Transaction"
+                          >
+                            <Edit size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTransaction(transaction)}
+                            className="btn btn-xs btn-outline btn-error"
+                            title="Delete Transaction"
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </td>
                     </tr>

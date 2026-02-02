@@ -42,10 +42,6 @@ const Login = () => {
     clearAllTokens();
 
     try {
-      const csrfResponse = await Axios.get("/csrf-token", {
-        withCredentials: true,
-      });
-
       const response = await Axios.post(
         "/login",
         {
@@ -54,9 +50,6 @@ const Login = () => {
         },
         {
           withCredentials: true,
-          headers: {
-            "X-CSRF-Token": csrfResponse.data.csrfToken,
-          },
         }
       );
 
@@ -131,7 +124,7 @@ const Login = () => {
       >
         <img src={bloodLogo} alt="Blood Logo" className="w-20 h-20 mb-2" />
         <h1 className="text-3xl font-extrabold text-[#780A0A] tracking-wide">
-          রক্তের বন্ধন
+          ROTARACT
         </h1>
         <p className="text-gray-700 font-semibold text-sm mt-1">
           লগইন করে রক্তের মহান অভিযানে অংশ নিন ❤️

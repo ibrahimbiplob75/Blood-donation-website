@@ -39,7 +39,7 @@ const getUsers = async (req, res) => {
 
 const createUser = async (req, res) => {
   try {
-    const { name, phone, lastDonateDate, email, bloodGroup, district, password, role } = req.body;
+    const { name, phone, lastDonateDate, email, bloodGroup, district, password, role, batchNo, course } = req.body;
     
     const { usersCollection } = getCollections();
     const existingUser = await usersCollection.findOne({
@@ -65,6 +65,8 @@ const createUser = async (req, res) => {
       bloodGiven: 0,
       bloodGroup: bloodGroup || '',
       district: district || '',
+      batchNo: batchNo ? parseInt(batchNo) : null,
+      course: course || null,
       password: hashedPassword,
       donorApprovalStatus: 'pending',
       createdAt: new Date(),
@@ -96,7 +98,7 @@ const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
     console.log('Updating user with ID:', id);
-    const { name, phone, lastDonateDate, email, role, bloodGroup, district, bloodGiven, bloodTaken, password } = req.body;
+    const { name, phone, lastDonateDate, email, role, bloodGroup, district, bloodGiven, bloodTaken, password, batchNo, course } = req.body;
     
     if (!ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid user ID format' });
@@ -124,6 +126,8 @@ const updateUser = async (req, res) => {
       email: email ? email.trim().toLowerCase() : existingUser.email,
       bloodGroup: bloodGroup || existingUser.bloodGroup,
       district: district || existingUser.district,
+      batchNo: batchNo ? parseInt(batchNo) : existingUser.batchNo,
+      course: course || existingUser.course,
       bloodGiven: bloodGiven !== undefined ? parseInt(bloodGiven) || 0 : existingUser.bloodGiven || 0,
       bloodTaken: bloodTaken !== undefined ? parseInt(bloodTaken) || 0 : existingUser.bloodTaken || 0,
       updatedAt: new Date()

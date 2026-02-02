@@ -195,13 +195,6 @@ const verifyAdminToken = async (req, res) => {
 };
 
 /**
- * Get CSRF Token
- */
-const getCSRFToken = (req, res) => {
-  res.json({ csrfToken: req.csrfToken() });
-};
-
-/**
  * Verify Authenticated User Middleware
  * Requires valid token but user doesn't need to be admin
  */
@@ -285,7 +278,6 @@ module.exports = {
   loginAdmin,
   logoutAdmin,
   verifyAdminToken,
-  getCSRFToken,
   verifyAuthenticated,
   verifyAdmin
 };

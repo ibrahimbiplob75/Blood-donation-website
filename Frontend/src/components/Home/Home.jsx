@@ -1,6 +1,6 @@
 import { useState, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import useAxios from "../../Hooks/useAxios.js";
+import AxiosPublic from "../../context/AxiosPublic.jsx";
 import Swal from "sweetalert2";
 import CountUp from "react-countup";
 import "slick-carousel/slick/slick.css";
@@ -30,7 +30,7 @@ const Home = () => {
   const [eligibilityResultColor, setEligibilityResultColor] = useState("green");
   const { user } = useContext(AuthProvider);
   const navigate = useNavigate();
-  const axios = useAxios();
+  const [publicAxios] = AxiosPublic();
 
   // Fetch statistics on mount
   useEffect(() => {
@@ -42,7 +42,7 @@ const Home = () => {
   const fetchLatestRequests = async () => {
     try {
       setRequestsLoading(true);
-      const response = await axios.get("/blood-requests", {
+      const response = await publicAxios.get("/blood-requests", {
         params: { status: "pending" },
       });
 
@@ -71,7 +71,7 @@ const Home = () => {
   const fetchStatistics = async () => {
     try {
       setStatsLoading(true);
-      const response = await axios.get("/admin/statistics");
+      const response = await publicAxios.get("/statistics");
       if (response.data.success && response.data.data) {
         setStats({
           activeDonors: response.data.data.activeDonors || 1250,
@@ -89,7 +89,7 @@ const Home = () => {
 
   const fetchPendingCount = async () => {
     try {
-      const response = await axios.get("/blood-requests", {
+      const response = await publicAxios.get("/blood-requests", {
         params: { status: "pending", includeUnapproved: true },
       });
       if (Array.isArray(response.data)) {

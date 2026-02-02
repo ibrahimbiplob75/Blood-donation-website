@@ -43,6 +43,15 @@ const UserSchema = new mongoose.Schema({
   district: {
     type: String,
   },
+  batchNo: {
+    type: Number,
+    min: 10,
+    max: 99,
+  },
+  course: {
+    type: String,
+    enum: ['MBBS', 'BDS'],
+  },
   lastDonateDate: {
     type: Date,
   },

@@ -20,6 +20,7 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
 
   const bloodGroups = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
+  const courses = ["MBBS", "BDS"];
   const districts = [
     "Dhaka",
     "Faridpur",
@@ -98,6 +99,8 @@ const Register = () => {
         bloodGroup: data.bloodGroup,
         district: data.district,
         lastDonateDate: data.lastDonateDate,
+        batchNo: data.batchNo,
+        course: data.course,
         role: "user",
         password: data.password,
       };
@@ -142,7 +145,7 @@ const Register = () => {
         >
           <img src={bloodLogo} alt="Blood Logo" className="w-20 h-20 mb-2" />
           <h1 className="text-3xl font-extrabold text-[#780A0A] tracking-wide">
-            রক্তের বন্ধন
+            ROTARACT
           </h1>
           <p className="text-gray-700 font-semibold text-sm mt-1">
             রক্তদাতা হিশেবে যোগ দিন ❤️
@@ -240,6 +243,47 @@ const Register = () => {
               </select>
               {errors.district && (
                 <span className="text-red-600">District is required</span>
+              )}
+            </div>
+
+            {/* Batch No */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text">Batch No</span>
+              </label>
+              <input
+                type="number"
+                {...register("batchNo", { 
+                  required: true,
+                  min: 10,
+                  max: 99
+                })}
+                placeholder="Enter 2-digit batch number (10-99)"
+                className="input input-bordered"
+              />
+              {errors.batchNo && (
+                <span className="text-red-600">Batch No must be a 2-digit number (10-99)</span>
+              )}
+            </div>
+
+            {/* Course */}
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text">Course</span>
+              </label>
+              <select
+                {...register("course", { required: true })}
+                className="select select-bordered"
+              >
+                <option value="">Select Course</option>
+                {courses.map((course) => (
+                  <option key={course} value={course}>
+                    {course}
+                  </option>
+                ))}
+              </select>
+              {errors.course && (
+                <span className="text-red-600">Course is required</span>
               )}
             </div>
 

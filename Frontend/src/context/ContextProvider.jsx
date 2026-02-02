@@ -1,6 +1,6 @@
 import { createContext, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import AxiosPublic from "../context/AxiosPublic.jsx";
+import useAxios from "../Hooks/useAxios.js";
 import {
   clearAllTokens,
   hasAdminToken,
@@ -15,7 +15,7 @@ import {
 export const AuthProvider = createContext(null);
 
 const ContextProvider = ({ children }) => {
-  const [publicAxios] = AxiosPublic();
+  const Axios = useAxios();
   const queryClient = useQueryClient();
   const [user, setUser] = useState(null);
   const [loader, setLoading] = useState(true);
@@ -27,28 +27,27 @@ const ContextProvider = ({ children }) => {
       // 1. Capture admin token status BEFORE clearing anything
       const wasAdmin = hasAdminToken();
 
-      // 2. Immediately clear all tokens from localStorage
-      clearAllTokens();
-
-      // 3. Clear React Query cache so no stale auth data remains
-      queryClient.clear();
-
-      // 4. Immediately clear React state so UI redirects right away
-      setIsAdmin(false);
-      setUserRole(null);
-      setUser(null);
-
-      // 5. Perform backend logout (clear cookie, blacklist token)
+      // 2. Perform backend logout FIRST (while token is still available for the interceptor)
       const backendLogoutFn = async () => {
         if (wasAdmin) {
-          await publicAxios.post("/admin/logout", {}, { withCredentials: true });
+          await Axios.post("/admin/logout", {}, { withCredentials: true });
         } else {
-          await publicAxios.post("/logout", {}, { withCredentials: true });
+          await Axios.post("/logout", {}, { withCredentials: true });
         }
       };
 
-      // 6. Execute logout (backend + cross-tab broadcast)
       await performLogout(backendLogoutFn);
+
+      // 3. Clear all tokens from localStorage
+      clearAllTokens();
+
+      // 4. Clear React Query cache so no stale auth data remains
+      queryClient.clear();
+
+      // 5. Clear React state so UI redirects
+      setIsAdmin(false);
+      setUserRole(null);
+      setUser(null);
 
       return { success: true };
     } catch (error) {
@@ -68,7 +67,7 @@ const ContextProvider = ({ children }) => {
   // Check admin session on mount and after login
   const checkAdminSession = async () => {
     try {
-      const response = await publicAxios.get("/verify-token", {
+      const response = await Axios.get("/verify-token", {
         withCredentials: true,
       });
 

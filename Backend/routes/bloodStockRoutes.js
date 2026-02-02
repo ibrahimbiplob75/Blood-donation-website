@@ -8,7 +8,9 @@ const {
   getBloodTransactions,
   getTransactionStats,
   getAllBloodStock,
-  getBloodStockByUserGroup
+  getBloodStockByUserGroup,
+  updateBloodTransaction,
+  deleteBloodTransaction
 } = require('../controllers/bloodStockController');
 const { verifyAdmin } = require('../middleware/auth');
 
@@ -19,6 +21,8 @@ router.post('/admin/blood-donate', bloodDonate);
 router.post('/admin/blood-exchange', verifyAdmin, bloodExchange);
 router.get('/admin/blood-transactions', verifyAdmin, getBloodTransactions);
 router.get('/admin/transaction-stats', verifyAdmin, getTransactionStats);
+router.put('/admin/blood-transactions/:id', verifyAdmin, updateBloodTransaction);
+router.delete('/admin/blood-transactions/:id', verifyAdmin, deleteBloodTransaction);
 
 // Public routes (can be accessed by users)
 router.get('/admin/all-blood-stock', getAllBloodStock);

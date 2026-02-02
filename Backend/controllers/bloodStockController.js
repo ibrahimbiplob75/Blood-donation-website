@@ -452,6 +452,187 @@ const getBloodStockByUserGroup = async (req, res) => {
   }
 };
 
+// Update blood transaction
+const updateBloodTransaction = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { units, donorName, donorPhone, receiverName, receiverPhone, hospitalName, patientId, notes } = req.body;
+    
+    const { bloodTransactionsCollection, bloodStockCollection } = getCollections();
+    
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid transaction ID'
+      });
+    }
+    
+    // Get existing transaction
+    const existingTransaction = await bloodTransactionsCollection.findOne({ _id: new ObjectId(id) });
+    
+    if (!existingTransaction) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found'
+      });
+    }
+    
+    const oldUnits = existingTransaction.units;
+    const newUnits = parseInt(units);
+    const unitsDifference = newUnits - oldUnits;
+    
+    // Update stock based on transaction type and units change
+    if (unitsDifference !== 0) {
+      if (existingTransaction.type === 'entry') {
+        // Entry: increase in units = increase stock, decrease in units = decrease stock
+        await bloodStockCollection.updateOne(
+          { bloodGroup: existingTransaction.bloodGroup },
+          { 
+            $inc: { units: unitsDifference },
+            $set: { lastUpdated: new Date() }
+          }
+        );
+      } else if (existingTransaction.type === 'donate') {
+        // Donate: increase in units = decrease stock, decrease in units = increase stock
+        await bloodStockCollection.updateOne(
+          { bloodGroup: existingTransaction.bloodGroup },
+          { 
+            $inc: { units: -unitsDifference },
+            $set: { lastUpdated: new Date() }
+          }
+        );
+      } else if (existingTransaction.type === 'exchange') {
+        // Exchange: adjust both blood groups
+        await bloodStockCollection.updateOne(
+          { bloodGroup: existingTransaction.fromBloodGroup },
+          { 
+            $inc: { units: -unitsDifference },
+            $set: { lastUpdated: new Date() }
+          }
+        );
+        await bloodStockCollection.updateOne(
+          { bloodGroup: existingTransaction.toBloodGroup },
+          { 
+            $inc: { units: unitsDifference },
+            $set: { lastUpdated: new Date() }
+          }
+        );
+      }
+    }
+    
+    // Update transaction
+    const updateData = {
+      units: newUnits,
+      updatedAt: new Date(),
+      updatedBy: req.admin?.phone || req.admin?.email || 'system'
+    };
+    
+    if (donorName !== undefined) updateData.donorName = donorName;
+    if (donorPhone !== undefined) updateData.donorPhone = donorPhone;
+    if (receiverName !== undefined) updateData.receiverName = receiverName;
+    if (receiverPhone !== undefined) updateData.receiverPhone = receiverPhone;
+    if (hospitalName !== undefined) updateData.hospitalName = hospitalName;
+    if (patientId !== undefined) updateData.patientId = patientId;
+    if (notes !== undefined) updateData.notes = notes;
+    
+    await bloodTransactionsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    );
+    
+    res.json({
+      success: true,
+      message: 'Transaction updated successfully',
+      unitsDifference
+    });
+  } catch (error) {
+    console.error('Update transaction error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update transaction',
+      error: error.message
+    });
+  }
+};
+
+// Delete blood transaction
+const deleteBloodTransaction = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const { bloodTransactionsCollection, bloodStockCollection } = getCollections();
+    
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid transaction ID'
+      });
+    }
+    
+    // Get existing transaction
+    const transaction = await bloodTransactionsCollection.findOne({ _id: new ObjectId(id) });
+    
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found'
+      });
+    }
+    
+    // Restore stock based on transaction type
+    if (transaction.type === 'entry') {
+      // Entry: remove the units that were added
+      await bloodStockCollection.updateOne(
+        { bloodGroup: transaction.bloodGroup },
+        { 
+          $inc: { units: -transaction.units },
+          $set: { lastUpdated: new Date() }
+        }
+      );
+    } else if (transaction.type === 'donate') {
+      // Donate: restore the units that were donated
+      await bloodStockCollection.updateOne(
+        { bloodGroup: transaction.bloodGroup },
+        { 
+          $inc: { units: transaction.units },
+          $set: { lastUpdated: new Date() }
+        }
+      );
+    } else if (transaction.type === 'exchange') {
+      // Exchange: reverse both blood group changes
+      await bloodStockCollection.updateOne(
+        { bloodGroup: transaction.fromBloodGroup },
+        { 
+          $inc: { units: transaction.units },
+          $set: { lastUpdated: new Date() }
+        }
+      );
+      await bloodStockCollection.updateOne(
+        { bloodGroup: transaction.toBloodGroup },
+        { 
+          $inc: { units: -transaction.units },
+          $set: { lastUpdated: new Date() }
+        }
+      );
+    }
+    
+    // Delete transaction
+    await bloodTransactionsCollection.deleteOne({ _id: new ObjectId(id) });
+    
+    res.json({
+      success: true,
+      message: 'Transaction deleted and stock restored successfully'
+    });
+  } catch (error) {
+    console.error('Delete transaction error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete transaction',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getBloodStock,
   bloodEntry,
@@ -460,5 +641,7 @@ module.exports = {
   getBloodTransactions,
   getTransactionStats,
   getAllBloodStock,
-  getBloodStockByUserGroup
+  getBloodStockByUserGroup,
+  updateBloodTransaction,
+  deleteBloodTransaction
 };

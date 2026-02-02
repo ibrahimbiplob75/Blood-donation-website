@@ -19,7 +19,7 @@ const { loginAdmin, logoutAdmin, verifyAdminToken } = require('./services/authSe
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-const { csrfProtection } = setupMiddleware(app);
+setupMiddleware(app);
 app.use(async (req, res, next) => {
   if (!isConnectionReady()) {
     try {
@@ -38,13 +38,8 @@ app.use(async (req, res, next) => {
 });
 
 
-app.get('/csrf-token', csrfProtection, (req, res) => {
-  res.json({ csrfToken: req.csrfToken() });
-});
-
-
-app.post('/login', csrfProtection, loginAdmin);
-app.post('/admin/login', csrfProtection, loginAdmin);
+app.post('/login', loginAdmin);
+app.post('/admin/login', loginAdmin);
 
 app.get('/verify-token', verifyAdminToken);
 app.get('/admin/verify-token', verifyAdminToken);
@@ -61,10 +56,7 @@ app.use('/donor', donorRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Global error handler:', err);
-  if (err.code === 'EBADCSRFTOKEN') {
-    return res.status(403).json({ error: 'CSRF token invalid' });
-  }
-  res.status(500).json({ 
+  res.status(500).json({
     error: 'Internal server error',
     message: err.message,
     stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
