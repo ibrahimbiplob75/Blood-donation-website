@@ -230,7 +230,7 @@ const Dashboard = () => {
                       : "hover:bg-red-50 hover:shadow-md text-gray-700"
                   }`}
                 >
-                  <Users size={20} /> Blood bank List
+                  <Users size={20} /> Blood user List
                 </Link>
               </li>
 
@@ -243,7 +243,7 @@ const Dashboard = () => {
                       : "hover:bg-red-50 hover:shadow-md text-gray-700"
                   }`}
                 >
-                  <Activity size={20} /> Donation History
+                  <Activity size={20} /> User History[Donor]
                 </Link>
               </li>
               <li>
@@ -327,7 +327,7 @@ const Dashboard = () => {
                       : "hover:bg-red-50 hover:shadow-md text-gray-700"
                   }`}
                 >
-                  <Settings size={20} /> Admin Management
+                  <Settings size={20} /> User Management
                 </Link>
               </li>
             </ul>

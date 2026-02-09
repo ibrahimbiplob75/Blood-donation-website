@@ -8,11 +8,13 @@ const {
   getDonationRequestById,
   approveDonationRequest,
   rejectDonationRequest,
-  deleteDonationRequest
+  deleteDonationRequest,
+  checkDonorEligibilityPreview
 } = require('../controllers/donationRequestController');
 
 // Public routes
 router.post('/donation-requests', createDonationRequest);
+router.post('/donation-requests/check-eligibility', checkDonorEligibilityPreview);
 router.get('/donation-requests', getDonationRequests);
 router.get('/donation-requests/:id', getDonationRequestById);
 

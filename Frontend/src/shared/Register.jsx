@@ -18,6 +18,7 @@ const Register = () => {
   const navigate = useNavigate();
   const [publicAxios] = AxiosPublic();
   const [loading, setLoading] = useState(false);
+  const [isRmc, setIsRmc] = useState(true);
 
   const bloodGroups = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
   const courses = ["MBBS", "BDS"];
@@ -99,7 +100,8 @@ const Register = () => {
         bloodGroup: data.bloodGroup,
         district: data.district,
         lastDonateDate: data.lastDonateDate,
-        batchNo: data.batchNo,
+        batchNo: isRmc ? data.batchNo : null,
+        designation: !isRmc ? data.designation : null,
         course: data.course,
         role: "user",
         password: data.password,
@@ -246,44 +248,109 @@ const Register = () => {
               )}
             </div>
 
-            {/* Batch No */}
+            {/* RMC Status */}
             <div className="form-control">
               <label className="label">
-                <span className="label-text">Batch No</span>
+                <span className="label-text">Are you from RMC running?</span>
               </label>
-              <input
-                type="number"
-                {...register("batchNo", { 
-                  required: true,
-                  min: 10,
-                  max: 99
-                })}
-                placeholder="Enter 2-digit batch number (10-99)"
-                className="input input-bordered"
-              />
-              {errors.batchNo && (
-                <span className="text-red-600">Batch No must be a 2-digit number (10-99)</span>
-              )}
+              <div className="flex gap-4">
+                <label className="label cursor-pointer gap-2">
+                  <input
+                    type="radio"
+                    name="rmc"
+                    value="yes"
+                    className="radio"
+                    checked={isRmc}
+                    onChange={() => setIsRmc(true)}
+                  />
+                  <span className="label-text">Yes (RMC Running)</span>
+                </label>
+                <label className="label cursor-pointer gap-2">
+                  <input
+                    type="radio"
+                    name="rmc"
+                    value="no"
+                    className="radio"
+                    checked={!isRmc}
+                    onChange={() => setIsRmc(false)}
+                  />
+                  <span className="label-text">No (Other)</span>
+                </label>
+              </div>
             </div>
 
-            {/* Course */}
+            {/* Batch No / Present Designation */}
+            {isRmc ? (
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text">Batch No</span>
+                </label>
+                <input
+                  type="number"
+                  {...register("batchNo", {
+                    required: isRmc ? "Batch No is required" : false,
+                    min: { value: 10, message: "Batch No must be at least 10" },
+                    max: { value: 99, message: "Batch No must be at most 99" },
+                  })}
+                  placeholder="Enter 2-digit batch number (10-99)"
+                  className="input input-bordered"
+                />
+                {errors.batchNo && (
+                  <span className="text-red-600">{errors.batchNo.message}</span>
+                )}
+              </div>
+            ) : (
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text">Present Designation</span>
+                </label>
+                <input
+                  type="text"
+                  {...register("designation", {
+                    required: !isRmc ? "Present Designation is required" : false,
+                  })}
+                  placeholder="Enter your present designation"
+                  className="input input-bordered"
+                />
+                {errors.designation && (
+                  <span className="text-red-600">
+                    {errors.designation.message}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Course / Company */}
             <div className="form-control">
               <label className="label">
-                <span className="label-text">Course</span>
+                <span className="label-text">
+                  {isRmc ? "Course" : "Institute"}
+                </span>
               </label>
-              <select
-                {...register("course", { required: true })}
-                className="select select-bordered"
-              >
-                <option value="">Select Course</option>
-                {courses.map((course) => (
-                  <option key={course} value={course}>
-                    {course}
-                  </option>
-                ))}
-              </select>
+              {isRmc ? (
+                <select
+                  {...register("course", { required: true })}
+                  className="select select-bordered"
+                >
+                  <option value="">Select Course</option>
+                  {courses.map((course) => (
+                    <option key={course} value={course}>
+                      {course}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  {...register("course", { required: true })}
+                  placeholder="Enter your company name"
+                  className="input input-bordered"
+                />
+              )}
               {errors.course && (
-                <span className="text-red-600">Course is required</span>
+                <span className="text-red-600">
+                  {isRmc ? "Course" : "Company"} is required
+                </span>
               )}
             </div>
 
@@ -312,17 +379,15 @@ const Register = () => {
                 type="password"
                 {...register("password", {
                   required: true,
-                  minLength: 6,
-                  maxLength: 20,
-                  pattern: /(?=.*[A-Z])(?=.*[!@#$&*])(?=.*[0-9])(?=.*[a-z])/,
+                  minLength: 8,
+                  pattern: /^(?=.*[A-Za-z])(?=.*\d).+$/,
                 })}
                 placeholder="Create password"
                 className="input input-bordered"
               />
               {errors.password && (
                 <p className="text-red-600 text-sm">
-                  Password must have 6 chars, 1 uppercase, 1 lowercase, 1
-                  number & 1 symbol is good
+                  Password must be at least 8 characters with letters and numbers
                 </p>
               )}
             </div>

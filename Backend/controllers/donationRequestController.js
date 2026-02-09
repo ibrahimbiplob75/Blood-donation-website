@@ -1,5 +1,6 @@
 const { ObjectId } = require('mongodb');
 const { getCollections } = require('../config/database');
+const { checkDonorEligibility } = require('../utils/eligibilityChecker');
 
 /**
  * Create new donation request (when user wants to donate)
@@ -30,6 +31,26 @@ const createDonationRequest = async (req, res) => {
       });
     }
 
+    // Check donor eligibility
+    const eligibilityResult = checkDonorEligibility({
+      bloodGroup,
+      dateOfBirth,
+      weight,
+      lastDonationDate,
+      medicalConditions
+    });
+
+    // If not eligible, reject the request
+    if (!eligibilityResult.isEligible) {
+      return res.status(400).json({
+        success: false,
+        message: 'Donor is not eligible to donate blood',
+        eligible: false,
+        ineligibilityReasons: eligibilityResult.ineligibilityReasons,
+        warningMessages: eligibilityResult.warningMessages
+      });
+    }
+
     const { donationRequestsCollection } = getCollections();
 
     const newRequest = {
@@ -53,7 +74,14 @@ const createDonationRequest = async (req, res) => {
       approvedBy: null,
       approvedAt: null,
       addedToStockAt: null,
-      transactionId: null
+      transactionId: null,
+      eligibility: {
+        isEligible: eligibilityResult.isEligible,
+        ineligibilityReasons: eligibilityResult.ineligibilityReasons,
+        warningMessages: eligibilityResult.warningMessages,
+        checkedAt: new Date(),
+        checks: eligibilityResult.eligibilityChecks
+      }
     };
 
     const result = await donationRequestsCollection.insertOne(newRequest);
@@ -65,7 +93,8 @@ const createDonationRequest = async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'Donation request submitted successfully. Waiting for admin approval.',
-      request: createdRequest
+      request: createdRequest,
+      eligibility: eligibilityResult
     });
   } catch (error) {
     console.error('Create donation request error:', error);
@@ -186,7 +215,7 @@ const getDonationRequestById = async (req, res) => {
 const approveDonationRequest = async (req, res) => {
   try {
     const { id } = req.params;
-    const { adminId, adminEmail } = req.body;
+    const { adminId, adminEmail, bloodBagNumber } = req.body;
 
     if (!ObjectId.isValid(id)) {
       return res.status(400).json({
@@ -195,10 +224,19 @@ const approveDonationRequest = async (req, res) => {
       });
     }
 
+    // Blood bag number is required for donations
+    if (!bloodBagNumber || bloodBagNumber.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Blood bag number is required for donation approval'
+      });
+    }
+
     const {
       donationRequestsCollection,
       bloodStockCollection,
-      bloodTransactionsCollection
+      bloodTransactionsCollection,
+      donationHistoryCollection
     } = getCollections();
 
     // Get the donation request
@@ -260,6 +298,7 @@ const approveDonationRequest = async (req, res) => {
     });
 
     // Update donation request
+    const approvalDate = new Date();
     await donationRequestsCollection.updateOne(
       { _id: new ObjectId(id) },
       {
@@ -267,10 +306,11 @@ const approveDonationRequest = async (req, res) => {
           approvalStatus: 'approved',
           status: 'completed',
           approvedBy: adminEmail || adminId,
-          approvedAt: new Date(),
-          addedToStockAt: new Date(),
+          approvedAt: approvalDate,
+          addedToStockAt: approvalDate,
           transactionId: transaction.insertedId,
-          updatedAt: new Date()
+          bloodBagNumber: bloodBagNumber.trim(),
+          updatedAt: approvalDate
         }
       }
     );
@@ -279,9 +319,42 @@ const approveDonationRequest = async (req, res) => {
       _id: new ObjectId(id)
     });
 
+    // Create donation history record with blood bag number
+    try {
+      const donationHistoryData = {
+        userId: new ObjectId(id), // Using donation request ID as reference
+        donationRequestId: new ObjectId(id),
+        bloodRequestId: null, // This donation is not linked to a specific blood request
+        bloodBagNumber: bloodBagNumber.trim(),
+        bloodGroup: donationRequest.bloodGroup,
+        unitsGiven: donationRequest.units,
+        donationDate: approvalDate,
+        approvalDate: approvalDate,
+        approvedBy: adminEmail || adminId,
+        donorName: donationRequest.donorName || "",
+        donorPhone: donationRequest.donorPhone || "",
+        patientName: 'Unknown', // No specific patient for direct donations
+        hospitalName: '', // No specific hospital
+        notes: donationRequest.notes || '',
+        status: 'completed',
+        eligibility: {
+          isEligible: donationRequest.eligibility?.isEligible || true,
+          ineligibilityReasons: donationRequest.eligibility?.ineligibilityReasons || [],
+          warningMessages: donationRequest.eligibility?.warningMessages || [],
+          checkedAt: donationRequest.eligibility?.checkedAt || approvalDate,
+          checks: donationRequest.eligibility?.checks || {}
+        }
+      };
+
+      await donationHistoryCollection.insertOne(donationHistoryData);
+    } catch (historyError) {
+      console.error('Error creating donation history:', historyError);
+      // Continue even if history creation fails, don't block the approval
+    }
+
     res.status(200).json({
       success: true,
-      message: `Donation approved! ${donationRequest.units} unit(s) of ${donationRequest.bloodGroup} added to stock`,
+      message: `Donation approved with blood bag #${bloodBagNumber.trim()}! ${donationRequest.units} unit(s) of ${donationRequest.bloodGroup} added to stock`,
       request: updatedRequest,
       newStock: stockUpdate.value ? stockUpdate.value.units : donationRequest.units,
       transactionId: transaction.insertedId
@@ -393,6 +466,52 @@ const deleteDonationRequest = async (req, res) => {
   }
 };
 
+/**
+ * Check donor eligibility before submission (Pre-validation)
+ */
+const checkDonorEligibilityPreview = async (req, res) => {
+  try {
+    const {
+      bloodGroup,
+      dateOfBirth,
+      weight,
+      lastDonationDate,
+      medicalConditions
+    } = req.body;
+
+    // Check if at least one required field is present
+    if (!bloodGroup && !dateOfBirth && !weight && !lastDonationDate && !medicalConditions) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide at least one field to check eligibility'
+      });
+    }
+
+    const eligibilityResult = checkDonorEligibility({
+      bloodGroup,
+      dateOfBirth,
+      weight,
+      lastDonationDate,
+      medicalConditions
+    });
+
+    res.status(200).json({
+      success: true,
+      eligible: eligibilityResult.isEligible,
+      ineligibilityReasons: eligibilityResult.ineligibilityReasons,
+      warningMessages: eligibilityResult.warningMessages,
+      eligibilityChecks: eligibilityResult.eligibilityChecks
+    });
+  } catch (error) {
+    console.error('Check donor eligibility error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check donor eligibility',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createDonationRequest,
   getDonationRequests,
@@ -400,5 +519,6 @@ module.exports = {
   getDonationRequestById,
   approveDonationRequest,
   rejectDonationRequest,
-  deleteDonationRequest
+  deleteDonationRequest,
+  checkDonorEligibilityPreview
 };

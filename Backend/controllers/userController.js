@@ -665,7 +665,7 @@ const uploadUsers = async (req, res) => {
 
     // Expected columns for user upload
     const expectedColumns = [
-      'Name', 'phone', 'email', 'bloodGroup', 'district','role','bloodGiven','bloodTaken',
+      'Name', 'phone', 'email', 'bloodGroup', 'district', 'role', 'bloodGiven', 'bloodTaken',
     ];
 
     // Validate columns
@@ -774,6 +774,32 @@ const uploadUsers = async (req, res) => {
           processedRow.lastDonateDate = null;
         }
 
+        // Normalize course/institute (optional)
+        if ((processedRow.course === undefined || processedRow.course === null || processedRow.course === '') &&
+            (processedRow.institute !== undefined && processedRow.institute !== null && processedRow.institute !== '')) {
+          processedRow.course = processedRow.institute;
+        }
+        if (processedRow.course !== undefined && processedRow.course !== null && processedRow.course !== '') {
+          processedRow.course = String(processedRow.course).trim();
+          if (processedRow.course.length === 0) {
+            validationErrors.push(`Row ${rowNumber}: Course/Institute cannot be empty.`);
+          }
+        } else {
+          processedRow.course = null;
+        }
+
+        // Validate and process batchNo (optional)
+        if (processedRow.batchNo !== undefined && processedRow.batchNo !== null && processedRow.batchNo !== '') {
+          const batchNo = parseInt(processedRow.batchNo, 10);
+          if (isNaN(batchNo) || batchNo < 10 || batchNo > 99) {
+            validationErrors.push(`Row ${rowNumber}: Invalid batchNo "${row.batchNo}". Must be between 10 and 99.`);
+          } else {
+            processedRow.batchNo = batchNo;
+          }
+        } else {
+          processedRow.batchNo = null;
+        }
+
         // Validate and process role (optional, defaults to 'donor')
         if (processedRow.role !== undefined && processedRow.role !== null && processedRow.role !== '') {
           processedRow.role = String(processedRow.role).trim().toLowerCase();
@@ -872,6 +898,8 @@ const uploadUsers = async (req, res) => {
           bloodGroup: row.bloodGroup,
           district: row.district,
           lastDonateDate: row.lastDonateDate || null,
+          batchNo: row.batchNo || null,
+          course: row.course || null,
           password: hashedPassword,
           role: row.role || 'donor',
           bloodGiven: row.bloodGiven || 0,

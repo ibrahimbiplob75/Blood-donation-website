@@ -18,6 +18,7 @@ const { loginAdmin, logoutAdmin, verifyAdminToken } = require('./services/authSe
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+const HOST = process.env.HOST || '127.0.0.1';
 
 setupMiddleware(app);
 app.use(async (req, res, next) => {
@@ -73,8 +74,6 @@ async function startServer() {
     if (!mongoose.connection.readyState) {
       console.log('Connecting to MongoDB via Mongoose...');
       await mongoose.connect(process.env.DB_URI, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
         serverSelectionTimeoutMS: 5000,
         socketTimeoutMS: 45000,
       });
@@ -87,8 +86,8 @@ async function startServer() {
     initializeBlacklistService();
     
     startAvailabilityScheduler();
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
+    app.listen(PORT, HOST, () => {
+      console.log(`Server running on http://${HOST}:${PORT}`);
     });
 
 

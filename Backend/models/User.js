@@ -48,6 +48,9 @@ const UserSchema = new mongoose.Schema({
     min: 10,
     max: 99,
   },
+  designation: {
+    type: String,
+  },
   course: {
     type: String,
     enum: ['MBBS', 'BDS'],

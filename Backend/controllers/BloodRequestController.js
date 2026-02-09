@@ -1,5 +1,6 @@
 const { ObjectId } = require('mongodb');
 const { getCollections } = require('../config/database');
+const { checkDonorEligibility } = require('../utils/eligibilityChecker');
 
 /**
  * Create new blood request
@@ -375,27 +376,43 @@ const getPendingBloodRequests = async (req, res) => {
 };
 
 /**
- * Approve blood request (Admin only)
+ * Approve blood request (Admin only) - Blood bag number now optional
  */
 const approveBloodRequest = async (req, res) => {
   try {
     const { id } = req.params;
-    const { adminId, adminEmail } = req.body;
+    const { adminId, adminEmail, bloodBagNumber } = req.body;
 
     if (!ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid request ID' });
     }
 
-    const { bloodRequestsCollection } = getCollections();
+    // Blood bag number is now optional for blood requests
+    // Blood bag numbers are assigned when donations are approved instead
 
+    const { bloodRequestsCollection, usersCollection } = getCollections();
+    const DonationHistory = require('../models/DonationHistory');
+
+    // Get the blood request
+    const bloodRequest = await bloodRequestsCollection.findOne({ 
+      _id: new ObjectId(id) 
+    });
+
+    if (!bloodRequest) {
+      return res.status(404).json({ message: 'Blood request not found' });
+    }
+
+    const approvalDate = new Date();
+
+    // Update blood request with approval (bag number goes to DonationHistory, not here)
     const result = await bloodRequestsCollection.updateOne(
       { _id: new ObjectId(id) },
       { 
         $set: { 
           approvalStatus: 'approved',
           approvedBy: adminId || adminEmail,
-          approvedAt: new Date(),
-          updatedAt: new Date()
+          approvedAt: approvalDate,
+          updatedAt: approvalDate
         } 
       }
     );
@@ -408,8 +425,25 @@ const approveBloodRequest = async (req, res) => {
       _id: new ObjectId(id)
     });
 
+    // Update user's last donation date if requestedBy exists
+    if (updatedRequest.requestedBy) {
+      await usersCollection.updateOne(
+        { _id: new ObjectId(updatedRequest.requestedBy) },
+        { 
+          $set: { 
+            lastDonateDate: approvalDate,
+            updatedAt: approvalDate
+          } 
+        }
+      );
+    }
+
+    // Note: Donation history is NO LONGER created here
+    // It will be created when a specific donation is approved with a blood bag number
+    // This keeps blood requests and donations separate
+
     res.status(200).json({
-      message: 'Blood request approved successfully',
+      message: 'Blood request approved successfully. Awaiting donation approval with blood bag assignment.',
       request: updatedRequest
     });
   } catch (error) {
@@ -475,7 +509,7 @@ const rejectBloodRequest = async (req, res) => {
 const donateFromBloodBank = async (req, res) => {
   try {
     const { id } = req.params;
-    const { units, adminEmail, adminName } = req.body;
+    const { units, adminEmail, adminName, selectedBloodBagId, usedFor } = req.body;
 
     if (!ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid request ID' });
@@ -485,7 +519,7 @@ const donateFromBloodBank = async (req, res) => {
       return res.status(400).json({ message: 'Valid units required' });
     }
 
-    const { bloodRequestsCollection, bloodStockCollection, bloodTransactionsCollection, usersCollection } = getCollections();
+    const { bloodRequestsCollection, bloodStockCollection, bloodTransactionsCollection, usersCollection, donationHistoryCollection } = getCollections();
 
     // Get the blood request
     const request = await bloodRequestsCollection.findOne({ _id: new ObjectId(id) });
@@ -496,6 +530,34 @@ const donateFromBloodBank = async (req, res) => {
 
     if (request.status !== 'pending') {
       return res.status(400).json({ message: 'Request is not pending' });
+    }
+
+    // If selectedBloodBagId is provided, update that specific blood bag with usedFor data
+    if (selectedBloodBagId && ObjectId.isValid(selectedBloodBagId)) {
+      const bloodBag = await donationHistoryCollection.findOne({ _id: new ObjectId(selectedBloodBagId) });
+      
+      if (!bloodBag) {
+        return res.status(404).json({ message: 'Blood bag not found' });
+      }
+
+      // Update the blood bag with bloodUsed flag and usedFor information
+      await donationHistoryCollection.updateOne(
+        { _id: new ObjectId(selectedBloodBagId) },
+        { 
+          $set: { 
+            bloodUsed: true,
+            usedFor: {
+              patientName: usedFor?.patientName || 'Unknown',
+              patientId: usedFor?.patientId || null,
+              hospitalName: usedFor?.hospitalName || request.hospitalName,
+              dateUsed: usedFor?.dateUsed ? new Date(usedFor.dateUsed) : new Date(),
+              usedBy: usedFor?.usedBy || adminName || 'Admin',
+              notes: usedFor?.notes || ''
+            },
+            updatedAt: new Date()
+          }
+        }
+      );
     }
 
     // Check stock availability
@@ -536,6 +598,7 @@ const donateFromBloodBank = async (req, res) => {
       previousStock: currentStock,
       newStock: currentStock - parseInt(units),
       status: 'completed',
+      usedFor: usedFor || null,
       notes: `Blood bank donation for request: ${request.reason}`
     });
 
@@ -551,7 +614,8 @@ const donateFromBloodBank = async (req, res) => {
           donorPhone: 'N/A',
           unitsProvided: parseInt(units),
           updatedAt: new Date(),
-          countersUpdated: true
+          countersUpdated: true,
+          usedFor: usedFor || null
         } 
       }
     );

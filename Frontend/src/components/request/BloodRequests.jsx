@@ -1,5 +1,6 @@
 import { useState, useEffect, useContext } from "react";
 import { AuthProvider } from "../../context/ContextProvider.jsx";
+import { useNavigate } from "react-router-dom";
 import AxiosPublic from "../../context/AxiosPublic.jsx";
 import useAxios from "../../Hooks/useAxios.js";
 import Swal from "sweetalert2";
@@ -9,6 +10,7 @@ const BloodRequests = () => {
   const { user, userRole } = useContext(AuthProvider);
   const [publicAxios] = AxiosPublic();
   const secureAxios = useAxios();
+  const navigate = useNavigate();
 
   const [requests, setRequests] = useState([]);
   const [filteredRequests, setFilteredRequests] = useState([]);
@@ -18,6 +20,17 @@ const BloodRequests = () => {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [bloodStock, setBloodStock] = useState({});
   const [bankDonationUnits, setBankDonationUnits] = useState(1);
+  const [donorBloodGroup, setDonorBloodGroup] = useState(null);
+  const [donorBloodGroupLoading, setDonorBloodGroupLoading] = useState(false);
+  const [availableBloodBags, setAvailableBloodBags] = useState([]);
+  const [loadingBags, setLoadingBags] = useState(false);
+  const [selectedBloodBag, setSelectedBloodBag] = useState(null);
+  const [bankPatientInfo, setBankPatientInfo] = useState({
+    patientName: "",
+    patientId: "",
+    dateUsed: new Date().toISOString().split('T')[0],
+    notes: "",
+  });
 
   // Filter states
   const [filterBloodGroup, setFilterBloodGroup] = useState("");
@@ -108,6 +121,13 @@ const BloodRequests = () => {
     fetchRequests();
   }, []);
 
+  // Fetch donor's blood group when user is available
+  useEffect(() => {
+    if (user) {
+      fetchDonorBloodGroup();
+    }
+  }, [user]);
+
   const fetchRequests = async () => {
     try {
       setLoading(true);
@@ -150,6 +170,32 @@ const BloodRequests = () => {
     setFilteredRequests(filtered);
   }, [filterBloodGroup, filterDistrict, filterStatus, filterUrgency, requests]);
 
+  // Function to fetch donor's blood group
+  const fetchDonorBloodGroup = async () => {
+    if (!user) return null;
+    
+    try {
+      setDonorBloodGroupLoading(true);
+      const response = await secureAxios.get(`/users?email=${user.email}`);
+      if (response.data && response.data.length > 0) {
+        const blood = response.data[0]?.bloodGroup || null;
+        setDonorBloodGroup(blood);
+        return blood;
+      }
+    } catch (error) {
+      console.error("Error fetching donor blood group:", error);
+    } finally {
+      setDonorBloodGroupLoading(false);
+    }
+    return null;
+  };
+
+  // Function to check if donor's blood group matches request
+  const isBloodGroupMatch = (requestBloodGroup) => {
+    if (!donorBloodGroup) return false;
+    return donorBloodGroup === requestBloodGroup;
+  };
+
   const handleDonateClick = (request) => {
     if (!user) {
       Swal.fire({
@@ -159,6 +205,18 @@ const BloodRequests = () => {
       });
       return;
     }
+
+    // Check blood group match
+    if (!isBloodGroupMatch(request.bloodGroup)) {
+      Swal.fire({
+        icon: "error",
+        title: "Blood Group Mismatch",
+        text: `This request requires ${request.bloodGroup} blood group. Your blood group (${donorBloodGroup || "not found"}) does not match.`,
+        confirmButtonColor: "#780A0A",
+      });
+      return;
+    }
+
     setSelectedRequest(request);
     setShowDonateModal(true);
   };
@@ -331,31 +389,71 @@ const BloodRequests = () => {
     }
   };
 
+  // Fetch available blood bags for a specific blood group
+  const fetchAvailableBloodBags = async (bloodGroup) => {
+    try {
+      setLoadingBags(true);
+      const response = await secureAxios.get(
+        `/admin/available-blood-bags?bloodGroup=${encodeURIComponent(bloodGroup)}`
+      );
+      let bagsData = [];
+      
+      // Handle different response structures
+      if (Array.isArray(response.data)) {
+        bagsData = response.data;
+      } else if (response.data?.bags && Array.isArray(response.data.bags)) {
+        bagsData = response.data.bags;
+      }
+      
+      if (bagsData.length > 0) {
+        setAvailableBloodBags(bagsData);
+        setSelectedBloodBag(bagsData[0]._id);
+        setBankDonationUnits(bagsData[0].units);
+      } else {
+        setAvailableBloodBags([]);
+        setSelectedBloodBag(null);
+      }
+    } catch (error) {
+      console.error("Error fetching blood bags:", error);
+      setAvailableBloodBags([]);
+      setSelectedBloodBag(null);
+    } finally {
+      setLoadingBags(false);
+    }
+  };
+
   // Handle blood bank donation click
   const handleBloodBankClick = async (request) => {
     await fetchBloodStock();
+    await fetchAvailableBloodBags(request.bloodGroup);
     setSelectedRequest(request);
     setBankDonationUnits(1);
+    setSelectedBloodBag(null);
+    setBankPatientInfo({
+      patientName: request.requesterName || "",
+      patientId: "",
+      dateUsed: new Date().toISOString().split('T')[0],
+      notes: "",
+    });
     setShowBloodBankModal(true);
   };
 
   // Confirm blood bank donation
   const handleConfirmBloodBankDonation = async () => {
-    if (!selectedRequest || !bankDonationUnits || bankDonationUnits <= 0) {
+    if (!selectedRequest || !selectedBloodBag) {
       Swal.fire({
         icon: "error",
         title: "Invalid Input",
-        text: "Please enter valid units",
+        text: "Please select a blood bag",
       });
       return;
     }
 
-    const availableUnits = bloodStock[selectedRequest.bloodGroup] || 0;
-    if (availableUnits < bankDonationUnits) {
+    if (!bankPatientInfo.patientName) {
       Swal.fire({
         icon: "error",
-        title: "Insufficient Stock",
-        text: `Only ${availableUnits} unit(s) available in stock`,
+        title: "Missing Information",
+        text: "Please enter patient name",
       });
       return;
     }
@@ -365,7 +463,16 @@ const BloodRequests = () => {
       const response = await secureAxios.put(
         `/blood-requests/${selectedRequest._id}/donate-from-bank`,
         {
+          selectedBloodBagId: selectedBloodBag,
           units: parseInt(bankDonationUnits),
+          usedFor: {
+            patientName: bankPatientInfo.patientName,
+            patientId: bankPatientInfo.patientId || null,
+            hospitalName: selectedRequest.hospitalName,
+            dateUsed: bankPatientInfo.dateUsed,
+            usedBy: user?.name || user?.displayName || "Admin",
+            notes: bankPatientInfo.notes,
+          },
           adminEmail: user?.email,
           adminName: user?.name || user?.displayName,
         }
@@ -375,13 +482,20 @@ const BloodRequests = () => {
         Swal.fire({
           icon: "success",
           title: "Success!",
-          text: `Successfully donated ${bankDonationUnits} unit(s) from blood bank`,
+          text: `Successfully assigned ${bankDonationUnits} unit(s) from blood bank to ${bankPatientInfo.patientName}`,
           timer: 2000,
         });
 
         setShowBloodBankModal(false);
         setSelectedRequest(null);
         setBankDonationUnits(1);
+        setSelectedBloodBag(null);
+        setBankPatientInfo({
+          patientName: "",
+          patientId: "",
+          dateUsed: new Date().toISOString().split('T')[0],
+          notes: "",
+        });
         fetchRequests();
       }
     } catch (error) {
@@ -662,7 +776,8 @@ const BloodRequests = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
-              className="bg-white shadow-lg rounded-xl p-6 hover:shadow-2xl transition-shadow"
+              // onClick={() => navigate(`/blood-request/${request._id}`)}
+              className="bg-white shadow-lg rounded-xl p-6 hover:shadow-2xl transition-all cursor-pointer hover:scale-105"
             >
               {/* Header */}
               <div className="flex justify-between items-start mb-4">
@@ -687,8 +802,11 @@ const BloodRequests = () => {
                     </span>
                   </div>
                 </div>
-                <div className="text-right text-xs text-gray-500">
-                  {formatDate(request.createdAt)}
+                <div className="text-right">
+                  <div className="text-xs text-gray-500 mb-1">ID: {request._id?.slice(-8) || "N/A"}</div>
+                  <div className="text-xs text-gray-500">
+                    {formatDate(request.createdAt)}
+                  </div>
                 </div>
               </div>
 
@@ -764,73 +882,40 @@ const BloodRequests = () => {
                     )}
                   </div>
                 )}
-
-              {/* Actions */}
-              <div className="flex gap-2 flex-wrap">
+                {/* onClick={(e) => e.stopPropagation()} */}
+              {/* Actions - Row 1: Donate Blood and Blood Bank */}
+              <div className="flex gap-4 mb-2">
                 {request.status === "pending" && !isRequester(request) && (
                   <>
-                    <button
-                      onClick={() => handleDonateClick(request)}
-                      className="btn btn-sm bg-green-600 hover:bg-green-700 text-white flex-1"
-                    >
-                      Donate Blood
-                    </button>
-                    <button
-                      onClick={() => handleContact(request.contactNumber)}
-                      className="btn btn-sm bg-[#780A0A] hover:bg-[#a00b0b] text-white"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
+                    {isBloodGroupMatch(request.bloodGroup) ? (
+                      <button
+                        onClick={() => handleDonateClick(request)}
+                        className="btn btn-xs sm:btn-sm bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm flex-1 whitespace-normal"
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                        />
-                      </svg>
-                    </button>
+                        Donate Blood
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        title={`Blood group mismatch. Request: ${request.bloodGroup}, Your blood group: ${donorBloodGroup || "Not available"}`}
+                        className="btn btn-xs sm:btn-sm bg-gray-400 text-white text-xs sm:text-sm flex-1 whitespace-normal cursor-not-allowed opacity-60"
+                      >
+                        ❌ Blood Group Mismatch
+                      </button>
+                    )}
                   </>
                 )}
 
-                {/* Show contact button for requester on their own request */}
-                {request.status === "pending" && isRequester(request) && (
-                  <button
-                    onClick={() => handleContact(request.contactNumber)}
-                    className="btn btn-sm bg-[#780A0A] hover:bg-[#a00b0b] text-white flex-1"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 mr-2"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                      />
-                    </svg>
-                    Request - Contact
-                  </button>
-                )}
-
                 {/* Admin: Blood Bank Donation Button */}
-                {(userRole === "Admin" || userRole === "executive") && request.status === "pending" && (
+                {(userRole === "admin" || userRole === "Admin" || userRole === "executive") && request.status === "pending" && (
                   <button
                     onClick={() => handleBloodBankClick(request)}
-                    className="btn btn-sm bg-purple-600 hover:bg-purple-700 text-white flex-1"
+                    className="btn btn-xs sm:btn-sm bg-purple-600 hover:bg-purple-700 text-white text-xs sm:text-sm flex-1 whitespace-normal gap-1"
                     title="Donate from Blood Bank Stock"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 mr-1"
+                      className="h-3 w-3 sm:h-4 sm:w-4"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -842,14 +927,64 @@ const BloodRequests = () => {
                         d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
                       />
                     </svg>
-                    Blood Bank
+                    Bank
+                  </button>
+                )}
+
+                {/* Requester Contact */}
+                {request.status === "pending" && isRequester(request) && (
+                  <button
+                    onClick={() => handleContact(request.contactNumber)}
+                    className="btn btn-xs sm:btn-sm bg-[#780A0A] hover:bg-[#a00b0b] text-white text-xs sm:text-sm flex-1 whitespace-normal gap-1"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-3 w-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                      />
+                    </svg>
+                    Call
+                  </button>
+                )}
+              </div>
+
+              {/* Actions - Row 2: Phone, Share, Delete */}
+              <div className="flex gap-2">
+                {request.status === "pending" && !isRequester(request) && (
+                  <button
+                    onClick={() => handleContact(request.contactNumber)}
+                    className="btn btn-xs sm:btn-sm bg-[#780A0A] hover:bg-[#a00b0b] text-white text-xs sm:text-sm flex-1 gap-1"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-3 w-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                      />
+                    </svg>
+                    Phone
                   </button>
                 )}
 
                 {/* Share Button - Available for all users */}
                 <button
                   onClick={() => {
-                    const url = `${window.location.origin}/blood-requests?id=${request._id}`;
+                    const url = `${window.location.origin}/blood-request/${request._id}`;
                     navigator.clipboard
                       .writeText(url)
                       .then(() => {
@@ -870,7 +1005,7 @@ const BloodRequests = () => {
                         });
                       });
                   }}
-                  className="btn btn-sm btn-ghost"
+                  className="btn btn-xs sm:btn-sm btn-ghost text-xs sm:text-sm flex-1 gap-1"
                   aria-label="Share request link"
                   title="Copy request link"
                 >
@@ -882,7 +1017,7 @@ const BloodRequests = () => {
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="w-5 h-5"
+                    className="w-3 h-3 sm:w-5 sm:h-5"
                   >
                     <circle cx="18" cy="5" r="3"></circle>
                     <circle cx="6" cy="12" r="3"></circle>
@@ -890,30 +1025,59 @@ const BloodRequests = () => {
                     <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
                     <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
                   </svg>
+                  Share
                 </button>
 
-                {/* Admin Actions */}
+                {/* Admin Delete */}
                 {(userRole === "Admin" || userRole === "executive") && (
-                  <>
-                    {request.status === "active" && (
-                      <button
-                        onClick={() =>
-                          handleStatusUpdate(request._id, "fulfilled")
-                        }
-                        className="btn btn-sm btn-success text-white"
-                        title="Mark as Fulfilled"
-                      >
-                       Ok 
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleDeleteRequest(request._id)}
-                      className="btn btn-sm btn-error text-white"
-                      title="Delete Request"
+                  <button
+                    onClick={() => handleDeleteRequest(request._id)}
+                    className="btn btn-xs sm:btn-sm btn-error text-white text-xs sm:text-sm flex-1 gap-1"
+                    title="Delete Request"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-3 w-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
                     >
-                      X
-                    </button>
-                  </>
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                    Delete
+                  </button>
+                )}
+
+                {/* Admin: Mark Fulfilled */}
+                {(userRole === "Admin" || userRole === "executive") && request.status === "active" && (
+                  <button
+                    onClick={() =>
+                      handleStatusUpdate(request._id, "fulfilled")
+                    }
+                    className="btn btn-xs sm:btn-sm btn-success text-white text-xs sm:text-sm flex-1 gap-1"
+                    title="Mark as Fulfilled"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-3 w-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    Done
+                  </button>
                 )}
               </div>
             </motion.div>
@@ -927,10 +1091,10 @@ const BloodRequests = () => {
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl"
+            className="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-96 overflow-y-auto"
           >
             <h3 className="text-2xl font-bold text-gray-800 mb-4">
-              Donate from Blood Bank
+              Assign Blood from Blood Bank
             </h3>
             
             <div className="mb-4 p-4 bg-red-50 rounded-lg border border-red-200">
@@ -941,51 +1105,128 @@ const BloodRequests = () => {
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-700 font-semibold">Available Stock:</span>
-                <span className="text-xl font-bold text-green-600">
-                  {bloodStock[selectedRequest.bloodGroup] || 0} units
-                </span>
+                <span className="text-gray-700 font-semibold">Hospital:</span>
+                <span className="text-gray-600 font-semibold">{selectedRequest.hospitalName}</span>
               </div>
             </div>
 
-            <div className="mb-4">
-              <div className="text-sm text-gray-600 mb-2">
-                <strong>Hospital:</strong> {selectedRequest.hospitalName}
-              </div>
-              <div className="text-sm text-gray-600 mb-2">
-                <strong>Patient:</strong> {selectedRequest.requesterName}
-              </div>
-              <div className="text-sm text-gray-600">
-                <strong>Urgency:</strong> <span className={`badge ${getUrgencyColor(selectedRequest.urgency)} badge-sm`}>{selectedRequest.urgency}</span>
-              </div>
-            </div>
-
-            {bloodStock[selectedRequest.bloodGroup] > 0 ? (
-              <>
-                <div className="form-control mb-4">
+            {availableBloodBags.length > 0 ? (
+              <div className="space-y-4">
+                {/* Select Blood Bag */}
+                <div className="form-control">
                   <label className="label">
-                    <span className="label-text font-semibold">Units to Donate:</span>
+                    <span className="label-text font-semibold">Select Blood Bag *</span>
                   </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max={bloodStock[selectedRequest.bloodGroup]}
-                    value={bankDonationUnits}
-                    onChange={(e) => setBankDonationUnits(parseInt(e.target.value) || 1)}
-                    className="input input-bordered w-full"
-                    placeholder="Enter units"
-                  />
-                  <label className="label">
-                    <span className="label-text-alt text-gray-500">
-                      Max: {bloodStock[selectedRequest.bloodGroup]} units
-                    </span>
-                  </label>
+                  {loadingBags ? (
+                    <div className="select select-bordered w-full flex items-center justify-center">
+                      <span className="loading loading-spinner loading-sm"></span>
+                      Loading bags...
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedBloodBag || ""}
+                      onChange={(e) => {
+                        const bagId = e.target.value;
+                        setSelectedBloodBag(bagId);
+                        const selectedBag = availableBloodBags.find(b => b._id === bagId);
+                        if (selectedBag) {
+                          setBankDonationUnits(selectedBag.units);
+                        }
+                      }}
+                      className="select select-bordered w-full"
+                      required
+                    >
+                      <option value="">-- Select a blood bag --</option>
+                      {availableBloodBags.map((bag) => (
+                        <option key={bag._id} value={bag._id}>
+                          {bag.bloodBagNumber} - {bag.donorName} ({bag.units} units)
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
-                <div className="flex gap-3">
+                {/* Patient Information */}
+                <div className="divider my-2">Patient Information</div>
+                
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text font-semibold">Patient Name *</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={bankPatientInfo.patientName}
+                    onChange={(e) =>
+                      setBankPatientInfo({ ...bankPatientInfo, patientName: e.target.value })
+                    }
+                    className="input input-bordered w-full"
+                    placeholder="Enter patient name"
+                    required
+                  />
+                </div>
+
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text">Patient ID</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={bankPatientInfo.patientId}
+                    onChange={(e) =>
+                      setBankPatientInfo({ ...bankPatientInfo, patientId: e.target.value })
+                    }
+                    className="input input-bordered w-full"
+                    placeholder="Enter patient ID (optional)"
+                  />
+                </div>
+
+
+
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text font-semibold">Date Used *</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={bankPatientInfo.dateUsed}
+                    onChange={(e) =>
+                      setBankPatientInfo({ ...bankPatientInfo, dateUsed: e.target.value })
+                    }
+                    className="input input-bordered w-full"
+                    required
+                  />
+                </div>
+
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text">Notes</span>
+                  </label>
+                  <textarea
+                    value={bankPatientInfo.notes}
+                    onChange={(e) =>
+                      setBankPatientInfo({ ...bankPatientInfo, notes: e.target.value })
+                    }
+                    className="textarea textarea-bordered w-full"
+                    placeholder="Additional notes (optional)"
+                    rows="2"
+                  />
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => {
+                      setShowBloodBankModal(false);
+                      setSelectedRequest(null);
+                      setBankDonationUnits(1);
+                      setSelectedBloodBag(null);
+                    }}
+                    className="btn btn-outline flex-1"
+                  >
+                    Cancel
+                  </button>
                   <button
                     onClick={handleConfirmBloodBankDonation}
-                    disabled={loading || bankDonationUnits <= 0 || bankDonationUnits > bloodStock[selectedRequest.bloodGroup]}
+                    disabled={loading || !selectedBloodBag}
                     className="btn bg-purple-600 hover:bg-purple-700 text-white flex-1 disabled:opacity-50"
                   >
                     {loading ? (
@@ -1009,52 +1250,16 @@ const BloodRequests = () => {
                             d="M5 13l4 4L19 7"
                           />
                         </svg>
-                        Confirm Donation
+                        Assign Blood
                       </>
                     )}
                   </button>
-                  <button
-                    onClick={() => {
-                      setShowBloodBankModal(false);
-                      setSelectedRequest(null);
-                      setBankDonationUnits(1);
-                    }}
-                    disabled={loading}
-                    className="btn btn-outline flex-1"
-                  >
-                    Cancel
-                  </button>
                 </div>
-              </>
+              </div>
             ) : (
-              <>
-                <div className="alert alert-error mb-4">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="stroke-current shrink-0 h-6 w-6"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <span>No {selectedRequest.bloodGroup} blood available in stock!</span>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowBloodBankModal(false);
-                    setSelectedRequest(null);
-                    setBankDonationUnits(1);
-                  }}
-                  className="btn btn-outline w-full"
-                >
-                  Close
-                </button>
-              </>
+              <div className="alert alert-warning">
+                <span>No available blood bags for {selectedRequest.bloodGroup}</span>
+              </div>
             )}
           </motion.div>
         </div>

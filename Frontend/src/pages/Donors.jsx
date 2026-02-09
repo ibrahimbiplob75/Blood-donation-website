@@ -23,8 +23,6 @@ const Donors = () => {
       const response = await api.get('/donor/public-stats');
       const data = response.data.data;
       
-      console.log('Blood Stock Stats from API:', data.bloodStockStats);
-      
       setStatistics({
         totalDonors: data.totalDonors,
         eligibleDonors: data.eligibleDonors,
@@ -75,12 +73,12 @@ const Donors = () => {
           <p className="text-xl text-gray-600 mb-8">
             Join our community of heroes who save lives through blood donation
           </p>
-          <button
+          {/* <button
             onClick={() => navigate('/register')}
             className="bg-red-600 hover:bg-red-700 text-white font-bold py-4 px-8 rounded-full text-lg shadow-lg transform transition hover:scale-105"
           >
             Register as a Donor
-          </button>
+          </button> */}
         </div>
 
         {/* Motivational Cards */}

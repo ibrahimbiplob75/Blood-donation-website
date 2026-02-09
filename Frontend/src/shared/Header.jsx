@@ -25,7 +25,7 @@ const Header = () => {
     { href: "/", label: "হোম" },
     { href: "/blood-bank", label: "Blood bank" },
     { href: "/blood-requests", label: "Blood Request" },
-    { href: "/blogs", label: "ব্লগ" },
+    { href: "https://blog.rmcrotaract.org", label: "ব্লগ" },
     { href: "/about", label: "আমাদের সম্পর্কে" },
   ];
 

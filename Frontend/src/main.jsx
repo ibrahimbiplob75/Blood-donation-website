@@ -25,6 +25,7 @@ import ApprovalManagement from "./components/admin/ApprovalManagement.jsx";
 import About from "./pages/About.jsx";
 import Donor from "./pages/Donors.jsx";
 import Blogs from "./pages/Blogs.jsx";
+import BloodRequestDetail from "./pages/BloodRequestDetail.jsx";
 
 // Tanstack Query configuration for better caching and state management
 const queryClient = new QueryClient({
@@ -68,6 +69,10 @@ const router = createBrowserRouter([
       {
         path: "/blood-requests",
         element: <BloodRequests></BloodRequests>,
+      },
+      {
+        path: "/blood-request/:id",
+        element: <BloodRequestDetail></BloodRequestDetail>,
       },
       {
         path: "/blogs",

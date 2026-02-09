@@ -22,6 +22,7 @@ const BloodBank = () => {
   // Filter states
   const [filterBloodGroup, setFilterBloodGroup] = useState("");
   const [filterDistrict, setFilterDistrict] = useState("");
+  const [filterAvailability, setFilterAvailability] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
   const bloodGroups = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
@@ -124,12 +125,16 @@ const BloodBank = () => {
   useEffect(() => {
     let filtered = [...donors];
 
-    // Search filter
+    // Search filter - searches by name, phone, course, and batch number
     if (searchTerm) {
       filtered = filtered.filter(
         (donor) =>
-          donor.Name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          donor.district?.toLowerCase().includes(searchTerm.toLowerCase())
+          (donor.name && donor.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (donor.Name && donor.Name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (donor.phone && donor.phone.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (donor.course && donor.course.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (donor.batchNo && donor.batchNo.toString().includes(searchTerm)) ||
+          (donor.district && donor.district.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
 
@@ -145,13 +150,28 @@ const BloodBank = () => {
       filtered = filtered.filter((donor) => donor.district === filterDistrict);
     }
 
+    // Availability filter
+    if (filterAvailability) {
+      filtered = filtered.filter((donor) => {
+        const daysUntil = calculateDaysUntilAvailable(donor.lastDonateDate);
+        const isAvailable = daysUntil === 0;
+
+        if (filterAvailability === "available") {
+          return isAvailable;
+        } else if (filterAvailability === "unavailable") {
+          return !isAvailable;
+        }
+        return true;
+      });
+    }
+
     // Limit to 10 if not logged in
     if (!user) {
       filtered = filtered.slice(0, 10);
     }
 
     setDisplayedDonors(filtered);
-  }, [donors, searchTerm, filterBloodGroup, filterDistrict, user]);
+  }, [donors, searchTerm, filterBloodGroup, filterDistrict, filterAvailability, user]);
 
   // Contact donor
   const handleContact = (phone) => {
@@ -221,6 +241,20 @@ const BloodBank = () => {
       "AB-": "bg-purple-200 text-purple-900",
     };
     return colors[bloodGroup] || "bg-gray-100 text-gray-800";
+  };
+
+  const calculateDaysUntilAvailable = (lastDonateDate) => {
+    if (!lastDonateDate) return 0;
+
+    const lastDate = new Date(lastDonateDate);
+    const nextAvailableDate = new Date(lastDate);
+    nextAvailableDate.setMonth(nextAvailableDate.getMonth() + 4);
+
+    const today = new Date();
+    const diffTime = nextAvailableDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    return diffDays > 0 ? diffDays : 0;
   };
 
   if (loading) {
@@ -311,7 +345,7 @@ const BloodBank = () => {
         className="bg-white shadow-lg rounded-xl p-6 mb-6"
       >
         <h2 className="text-xl font-bold text-gray-800 mb-4">Search Donors</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Search Bar */}
           <div className="form-control">
             <label className="label">
@@ -319,7 +353,7 @@ const BloodBank = () => {
             </label>
             <input
               type="text"
-              placeholder="Search by name or location..."
+              placeholder="Name, phone, course, batch..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="input input-bordered w-full"
@@ -360,6 +394,22 @@ const BloodBank = () => {
                   {district}
                 </option>
               ))}
+            </select>
+          </div>
+
+          {/* Availability Filter */}
+          <div className="form-control">
+            <label className="label">
+              <span className="label-text font-semibold">Availability</span>
+            </label>
+            <select
+              value={filterAvailability}
+              onChange={(e) => setFilterAvailability(e.target.value)}
+              className="select select-bordered w-full"
+            >
+              <option value="">All Donors</option>
+              <option value="available">Available</option>
+              <option value="unavailable">Unavailable</option>
             </select>
           </div>
         </div>
@@ -474,156 +524,200 @@ const BloodBank = () => {
         </motion.div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {displayedDonors.map((donor, index) => (
-            <motion.div
-              key={donor._id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-              className="bg-white shadow-lg rounded-xl p-6 hover:shadow-2xl transition-all relative overflow-hidden"
-            >
-              {/* Blood Group Badge - Top Right */}
-              <div className="absolute top-4 right-4">
-                <div
-                  className={`text-2xl font-bold px-3 py-1 rounded-lg ${getBloodGroupColor(
-                    donor.bloodGroup
-                  )}`}
-                >
-                  {donor.bloodGroup}
-                </div>
-              </div>
+          {displayedDonors.map((donor, index) => {
+            // Calculate availability based on lastDonateDate
+            const lastDonateDate = donor.lastDonateDate ? new Date(donor.lastDonateDate) : null;
+            const daysUntil = calculateDaysUntilAvailable(donor.lastDonateDate);
+            const isAvailable = daysUntil === 0;
 
-              {/* Donor Avatar */}
-              <div className="flex justify-center mb-4">
-                <div className="avatar placeholder">
-                  <div className="bg-neutral text-neutral-content rounded-full w-20">
-                    <span className="text-3xl">
-                      {donor.Name?.charAt(0).toUpperCase() || "?"}
-                    </span>
+            return (
+              <motion.div
+                key={donor._id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+                className="bg-white shadow-lg rounded-xl overflow-hidden hover:shadow-2xl transition-all relative"
+              >
+                {/* Header with Blood Group - Top */}
+                <div className={`${getBloodGroupColor(donor.bloodGroup)} p-4 flex justify-between items-start`}>
+                  <div>
+                    <div className="text-xs font-semibold opacity-75 mb-1">Blood Type</div>
+                    <div className="text-3xl font-bold">{donor.bloodGroup}</div>
+                  </div>
+                  {/* Availability Badge */}
+                  <div className={`badge gap-1 ${isAvailable ? "badge-success" : "badge-warning"}`}>
+                    <div className={`w-2 h-2 rounded-full ${isAvailable ? "animate-pulse" : ""}`}></div>
+                    {isAvailable ? "Available" : "Unavailable"}
                   </div>
                 </div>
-              </div>
 
-              {/* Donor Info */}
-              <div className="text-center mb-4">
-                <h3 className="text-xl font-bold text-gray-800 mb-1">
-                  {donor.Name || "Anonymous Donor"}
-                </h3>
+                {/* Main Content */}
+                <div className="p-5">
+                  {/* Donor Avatar & Name */}
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="avatar placeholder">
+                      <div className="bg-gradient-to-br from-[#780A0A] to-[#a00b0b] text-white rounded-full w-14">
+                        <span className="text-lg font-bold">
+                          {donor.name?.charAt(0).toUpperCase() || "D"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-gray-800">
+                        {donor.Name || "Anonymous"}
+                      </h3>
+                      <div className="text-xs text-gray-500">
+                        {donor.course && donor.batchNo ? `${donor.course} ${donor.batchNo}` : "User"}
+                      </div>
+                    </div>
+                  </div>
 
-                {/* Location */}
-                <div className="flex items-center justify-center text-sm text-gray-600 mb-2">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4 mr-1"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                  </svg>
-                  {donor.district || "Location Not Specified"}
+                  {/* Divider */}
+                  <div className="divider my-2"></div>
+
+                  {/* Contact Info */}
+                  <div className="space-y-2 mb-4 text-sm">
+                    {/* Email */}
+                    <div className="flex items-start gap-2">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                        />
+                      </svg>
+                      <div className="break-all text-gray-700">{donor.email}</div>
+                    </div>
+
+                    {/* Location */}
+                    <div className="flex items-center gap-2">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-gray-400 flex-shrink-0"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                      </svg>
+                      <span className="text-gray-700">{donor.district || "N/A"}</span>
+                    </div>
+
+                    {/* Phone */}
+                    <div className="flex items-center gap-2">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-gray-400 flex-shrink-0"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                        />
+                      </svg>
+                      <span className={!user ? "blur-sm" : ""}>
+                        {maskPhone(donor.phone)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Stats Row */}
+                  <div className="grid grid-cols-3 gap-2 mb-4 text-center">
+                    <div className="bg-red-50 rounded-lg p-2">
+                      <div className="text-xs text-gray-500">Given</div>
+                      <div className="text-lg font-bold text-red-600">{donor.bloodGiven || 0}</div>
+                    </div>
+                    <div className="bg-blue-50 rounded-lg p-2">
+                      <div className="text-xs text-gray-500">Taken</div>
+                      <div className="text-lg font-bold text-blue-600">{donor.bloodTaken || 0}</div>
+                    </div>
+                    <div className="bg-purple-50 rounded-lg p-2">
+                      <div className="text-xs text-gray-500">Role</div>
+                      <div className="text-xs font-bold text-purple-600 capitalize">{donor.role}</div>
+                    </div>
+                  </div>
+
+                  {/* Last Donation Info */}
+                  {lastDonateDate && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 mb-4 text-xs">
+                      <div className="text-yellow-800 font-semibold">
+                        Last Donation: {lastDonateDate.toLocaleDateString()}
+                      </div>
+                      <div className="text-yellow-700">
+                        {isAvailable ? "✓ Eligible to donate" : `Eligible in ${daysUntil} days`}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Phone Number */}
-                <div className="flex items-center justify-center text-sm text-gray-600 mb-3">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4 mr-1"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                    />
-                  </svg>
-                  <span className={!user ? "blur-sm" : ""}>
-                    {maskPhone(donor.phone)}
-                  </span>
-                </div>
+                {/* Contact Button */}
+                <button
+                  onClick={() => handleContact(donor.phone)}
+                  className={`w-full py-3 font-semibold transition-all ${
+                    user
+                      ? "bg-[#780A0A] hover:bg-[#a00b0b] text-white"
+                      : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  }`}
+                >
+                  {user ? (
+                    <>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 inline mr-2"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                        />
+                      </svg>
+                      Contact Donor
+                    </>
+                  ) : (
+                    "Login to Contact"
+                  )}
+                </button>
 
-                {/* Availability Badge */}
-                <div className="badge badge-success badge-sm gap-1">
-                  <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                  Available
-                </div>
-              </div>
-
-              {/* Contact Button */}
-              <button
-                onClick={() => handleContact(donor.phone)}
-                className={`btn btn-sm w-full ${
-                  user
-                    ? "bg-[#780A0A] hover:bg-[#a00b0b] text-white"
-                    : "btn-disabled"
-                }`}
-              >
-                {user ? (
-                  <>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 mr-1"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
+                {/* Blur overlay for non-logged-in users */}
+                {!user && index >= 5 && (
+                  <div className="absolute inset-0 bg-white bg-opacity-60 backdrop-blur-sm flex items-center justify-center rounded-xl">
+                    <button
+                      onClick={() => navigate("/login")}
+                      className="btn bg-[#780A0A] hover:bg-[#a00b0b] text-white btn-sm"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                      />
-                    </svg>
-                    Contact Donor
-                  </>
-                ) : (
-                  <>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 mr-1"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                      />
-                    </svg>
-                    Login to Contact
-                  </>
+                      Login to View
+                    </button>
+                  </div>
                 )}
-              </button>
-
-              {/* Blur overlay for non-logged-in users */}
-              {!user && index >= 5 && (
-                <div className="absolute inset-0 bg-white bg-opacity-60 backdrop-blur-sm flex items-center justify-center">
-                  <button
-                    onClick={() => navigate("/login")}
-                    className="btn bg-[#780A0A] hover:bg-[#a00b0b] text-white"
-                  >
-                    Login to View
-                  </button>
-                </div>
-              )}
-            </motion.div>
-          ))}
+              </motion.div>
+            );
+          })}
         </div>
       )}
 

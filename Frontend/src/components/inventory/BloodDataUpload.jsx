@@ -32,6 +32,8 @@ const BloodDataUpload = () => {
       "bloodGroup",
       "lastDonateDate",
       "district",
+      "batchNo",
+      "course",
       "role",
       "bloodGiven",
       "bloodTaken",
@@ -43,6 +45,8 @@ const BloodDataUpload = () => {
       "B+",
       "2026-01-15",
       "Dhaka",
+      "45",
+      "MBBS",
       "donor",
       "2",
       "0",
@@ -54,6 +58,8 @@ const BloodDataUpload = () => {
       "Text (A+, A-, B+, etc.)",
       "Date (YYYY-MM-DD)",
       "Text (District)",
+      "Number (10-99)",
+      "Text (Course or Institute)",
       "Text (admin/donor/user)",
       "Number (e.g., 0, 1, 2)",
       "Number (e.g., 0, 1, 2)",
@@ -377,6 +383,14 @@ const BloodDataUpload = () => {
           <p className="text-gray-600">
             Upload Excel file with user/donor information
           </p>
+          <div className="mt-4 flex justify-center gap-3">
+            <button
+              onClick={() => navigate("/admin/user-management")}
+              className="btn btn-sm bg-blue-600 hover:bg-blue-700 text-white border-none"
+            >
+              Add User from User Management
+            </button>
+          </div>
         </div>
 
         {/* Main Card */}
@@ -550,7 +564,7 @@ const BloodDataUpload = () => {
             <ul className="text-sm text-yellow-700 space-y-1 ml-6 list-disc">
               <li>Only Excel files (.xlsx or .xls) are accepted</li>
               <li>Required columns: Name, phone, email, bloodGroup, district</li>
-              <li>Optional columns: lastDonateDate (YYYY-MM-DD), role (admin/donor/user), bloodGiven, bloodTaken</li>
+              <li>Optional columns: lastDonateDate (YYYY-MM-DD), batchNo (10-99), course (Course or Institute), role (admin/donor/user), bloodGiven, bloodTaken</li>
               <li>Phone numbers must be 10+ digits</li>
               <li>Email must be valid (example@domain.com)</li>
               <li>Blood groups: A+, A-, B+, B-, O+, O-, AB+, AB-</li>

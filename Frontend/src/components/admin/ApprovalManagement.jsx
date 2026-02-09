@@ -18,81 +18,98 @@ const ApprovalManagement = () => {
   const [pendingDonations, setPendingDonations] = useState([]);
   const [pendingBloodRequests, setPendingBloodRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [activeTab, setActiveTab] = useState("donations"); // donations or requests
   const [processingId, setProcessingId] = useState(null);
+  const [showBloodBagModal, setShowBloodBagModal] = useState(false);
+  const [selectedRequestId, setSelectedRequestId] = useState(null);
+  const [selectedDonationId, setSelectedDonationId] = useState(null);
+  const [bloodBagNumber, setBloodBagNumber] = useState("");
+  const [bagModalLoading, setBagModalLoading] = useState(false);
+  const [modalType, setModalType] = useState(""); // "donation" or "request"
 
   useEffect(() => {
-    fetchPendingApprovals();
+    const controller = new AbortController();
+    fetchPendingApprovals(controller.signal);
+    return () => controller.abort();
   }, []);
 
-  const fetchPendingApprovals = async () => {
+  const fetchWithRetry = async (url, options, retries = 2, delayMs = 500) => {
+    try {
+      const response = await fetch(url, options);
+      if (!response.ok && retries > 0 && response.status >= 500) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        return fetchWithRetry(url, options, retries - 1, delayMs * 2);
+      }
+      return response;
+    } catch (error) {
+      if (retries > 0 && error.name !== "AbortError") {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        return fetchWithRetry(url, options, retries - 1, delayMs * 2);
+      }
+      throw error;
+    }
+  };
+
+  const fetchPendingApprovals = async (signal) => {
     try {
       setLoading(true);
+      setLoadError("");
       
       // Fetch pending donation requests
-      const donationsResponse = await fetch(`${baseURL}/donation-requests/admin/pending`, {
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-      });
+      const donationRequest = fetchWithRetry(
+        `${baseURL}/donation-requests/admin/pending`,
+        {
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          signal,
+        }
+      );
 
       // Fetch pending blood requests
-      const requestsResponse = await fetch(`${baseURL}/blood-requests/admin/pending`, {
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-      });
+      const bloodRequest = fetchWithRetry(
+        `${baseURL}/blood-requests/admin/pending`,
+        {
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          signal,
+        }
+      );
 
-      if (donationsResponse.ok) {
-        const donationsData = await donationsResponse.json();
+      const [donationsResult, requestsResult] = await Promise.allSettled([
+        donationRequest,
+        bloodRequest,
+      ]);
+
+      if (donationsResult.status === "fulfilled" && donationsResult.value.ok) {
+        const donationsData = await donationsResult.value.json();
         setPendingDonations(donationsData.requests || []);
+      } else if (donationsResult.status === "rejected" && donationsResult.reason?.name !== "AbortError") {
+        setLoadError("Some approvals could not be loaded. Please try again.");
       }
 
-      if (requestsResponse.ok) {
-        const requestsData = await requestsResponse.json();
+      if (requestsResult.status === "fulfilled" && requestsResult.value.ok) {
+        const requestsData = await requestsResult.value.json();
         setPendingBloodRequests(requestsData.requests || []);
+      } else if (requestsResult.status === "rejected" && requestsResult.reason?.name !== "AbortError") {
+        setLoadError("Some approvals could not be loaded. Please try again.");
       }
     } catch (error) {
-      console.error("Error fetching pending approvals:", error);
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "Failed to load pending approvals",
-      });
+      if (error.name !== "AbortError") {
+        console.error("Error fetching pending approvals:", error);
+        setLoadError("Failed to load pending approvals. Please retry.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const approveDonation = async (donationId) => {
-    try {
-      setProcessingId(donationId);
-      const response = await fetch(`${baseURL}/donation-requests/${donationId}/approve`, {
-        method: "PUT",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adminEmail: "admin@example.com" }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        Swal.fire({
-          icon: "success",
-          title: "Approved!",
-          text: data.message || "Donation approved and added to blood stock",
-          timer: 2000,
-        });
-        fetchPendingApprovals();
-      } else {
-        throw new Error("Failed to approve donation");
-      }
-    } catch (error) {
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "Failed to approve donation",
-      });
-    } finally {
-      setProcessingId(null);
-    }
+    // Show modal for blood bag number input for donation
+    setSelectedDonationId(donationId);
+    setBloodBagNumber("");
+    setModalType("donation");
+    setShowBloodBagModal(true);
   };
 
   const rejectDonation = async (donationId) => {
@@ -149,14 +166,16 @@ const ApprovalManagement = () => {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adminEmail: "admin@example.com" }),
+        body: JSON.stringify({ 
+          adminEmail: "admin@example.com"
+        }),
       });
 
       if (response.ok) {
         Swal.fire({
           icon: "success",
           title: "Approved!",
-          text: "Blood request has been approved and is now visible to donors",
+          text: "Blood request has been approved successfully",
           timer: 2000,
         });
         fetchPendingApprovals();
@@ -167,10 +186,65 @@ const ApprovalManagement = () => {
       Swal.fire({
         icon: "error",
         title: "Error",
-        text: "Failed to approve blood request",
+        text: error.message || "Failed to approve blood request",
       });
     } finally {
       setProcessingId(null);
+    }
+  };
+
+  const submitBloodBagApproval = async () => {
+    if (!bloodBagNumber.trim()) {
+      Swal.fire({
+        icon: "warning",
+        title: "Required Field",
+        text: "Please enter a blood bag number",
+      });
+      return;
+    }
+
+    try {
+      setBagModalLoading(true);
+      
+      if (modalType === "donation") {
+        // Approve donation with blood bag number
+        setProcessingId(selectedDonationId);
+        const response = await fetch(`${baseURL}/donation-requests/${selectedDonationId}/approve`, {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            adminEmail: "admin@example.com",
+            bloodBagNumber: bloodBagNumber.trim()
+          }),
+        });
+
+        if (response.ok) {
+          Swal.fire({
+            icon: "success",
+            title: "Approved!",
+            text: `Donation approved and assigned blood bag #${bloodBagNumber.trim()}`,
+            timer: 2000,
+          });
+          fetchPendingApprovals();
+          setShowBloodBagModal(false);
+          setBloodBagNumber("");
+          setSelectedDonationId(null);
+        } else {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to approve donation");
+        }
+      }
+    } catch (error) {
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: error.message || "Failed to process approval",
+      });
+    } finally {
+      setBagModalLoading(false);
+      setProcessingId(null);
+      setModalType("");
     }
   };
 
@@ -270,6 +344,18 @@ const ApprovalManagement = () => {
           </div>
         </div>
       </div>
+
+      {loadError && (
+        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 flex items-center justify-between">
+          <p className="text-sm">{loadError}</p>
+          <button
+            onClick={() => fetchPendingApprovals()}
+            className="btn btn-sm btn-error text-white"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="tabs tabs-boxed mb-6 bg-white shadow-md">
@@ -461,6 +547,56 @@ const ApprovalManagement = () => {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* Blood Bag Number Modal */}
+      {showBloodBagModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Assign Blood Bag Number</h2>
+            <p className="text-gray-600 mb-6">
+              {modalType === "donation" 
+                ? "Please enter the blood bag number for this approved donation. This will be recorded in the donation history."
+                : "Please enter the blood bag number for this approved blood request."}
+            </p>
+            
+            <input
+              type="text"
+              placeholder="e.g., BAG-001-2024"
+              value={bloodBagNumber}
+              onChange={(e) => setBloodBagNumber(e.target.value)}
+              className="input input-bordered w-full mb-6"
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  submitBloodBagApproval();
+                }
+              }}
+            />
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowBloodBagModal(false);
+                  setBloodBagNumber("");
+                  setSelectedRequestId(null);
+                  setSelectedDonationId(null);
+                  setModalType("");
+                }}
+                disabled={bagModalLoading}
+                className="btn btn-ghost flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitBloodBagApproval}
+                disabled={bagModalLoading || !bloodBagNumber.trim()}
+                className="btn btn-success text-white flex-1"
+              >
+                {bagModalLoading ? "Processing..." : "Assign & Approve"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

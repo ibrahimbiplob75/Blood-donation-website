@@ -1,9 +1,6 @@
 const User = require('../models/User');
 const { generateToken } = require('../utils/helpers');
 
-// @desc    Register user
-// @route   POST /api/auth/register
-// @access  Public
 exports.register = async (req, res) => {
   try {
     const { name, email, password, role, phone, address } = req.body;
@@ -42,9 +39,6 @@ exports.register = async (req, res) => {
   }
 };
 
-// @desc    Login user
-// @route   POST /api/auth/login
-// @access  Public
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -89,9 +83,7 @@ exports.login = async (req, res) => {
   }
 };
 
-// @desc    Get current logged in user
-// @route   GET /api/auth/me
-// @access  Private
+
 exports.getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
@@ -104,9 +96,7 @@ exports.getMe = async (req, res) => {
   }
 };
 
-// @desc    Logout user
-// @route   POST /api/auth/logout
-// @access  Private
+
 exports.logout = async (req, res) => {
   try {
     res.status(200).json({
@@ -118,9 +108,6 @@ exports.logout = async (req, res) => {
   }
 };
 
-// @desc    Verify token
-// @route   GET /api/auth/verify
-// @access  Private
 exports.verifyToken = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);

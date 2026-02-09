@@ -21,8 +21,7 @@ const updateDonorAvailability = async () => {
       fourMonthsLater.setMonth(fourMonthsLater.getMonth() + 4);
       
       const isNowAvailable = today >= fourMonthsLater;
-      
-      // Only update if status changed
+
       if (donor.available !== isNowAvailable) {
         await usersCollection.updateOne(
           { _id: donor._id },
@@ -51,11 +50,7 @@ const updateDonorAvailability = async () => {
   }
 };
 
-/**
- * Schedule daily availability check at midnight
- */
 const startAvailabilityScheduler = () => {
-  // Run daily at midnight (0 0 * * *)
   cron.schedule('0 0 * * *', async () => {
     console.log('Running daily donor availability check...');
     try {
@@ -68,9 +63,6 @@ const startAvailabilityScheduler = () => {
   console.log('Donor availability scheduler started - runs daily at midnight');
 };
 
-/**
- * Manual trigger for testing or immediate update
- */
 const triggerAvailabilityUpdate = async () => {
   console.log('Manually triggering availability update...');
   return await updateDonorAvailability();

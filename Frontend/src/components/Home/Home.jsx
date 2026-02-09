@@ -395,7 +395,7 @@ const Home = () => {
               </svg>
               Check Eligibility
             </button>
-          {pendingCount > 0 &&
+          {/* {pendingCount > 0 &&
             <button
               onClick={() => navigate("/blood-requests")}
               className="btn btn-secondary relative w-full sm:w-auto min-w-[220px] text-sm sm:text-base hover:scale-105 transition-transform shadow-lg"
@@ -412,7 +412,7 @@ const Home = () => {
                 </span>
               )}
             </button>
-    }
+            } */}
           </div>
         </div>
       </div>
@@ -446,7 +446,8 @@ const Home = () => {
               {latestRequests.map((req) => (
                 <div
                   key={req._id}
-                  className="p-4 rounded-xl border border-gray-100 bg-gradient-to-br from-red-50 to-white shadow-sm hover:shadow-md transition-shadow"
+                  onClick={() => navigate(`/blood-request/${req._id}`)}
+                  className="p-4 rounded-xl border border-gray-100 bg-gradient-to-br from-red-50 to-white shadow-sm hover:shadow-md transition-all cursor-pointer hover:scale-105 hover:border-red-300"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="badge badge-error badge-outline font-semibold text-xs sm:text-sm">
@@ -469,9 +470,9 @@ const Home = () => {
                     {req.hospitalName || "Hospital not specified"}
                   </h3>
                   <p className="text-sm text-gray-600 mb-1 text-left">
-                    📍 {req.hospitalLocation || "Location not specified"}
+                    📍 {req.reason || "Location not specified"}
                   </p>
-                  <p className="text-sm text-gray-600 text-left">🏥 District: {req.district || "N/A"}</p>
+                  {/* <p className="text-sm text-gray-600 text-left">🏥 District: {req.district || "N/A"}</p> */}
 
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
                     <span>

@@ -185,7 +185,9 @@ const verifyAdminToken = async (req, res) => {
         name: user.Name,
         email: user.email,
         role: user.role,
-        subrole: user.subrole || ''
+        subrole: user.subrole || '',
+        bloodGroup: user.bloodGroup || null,
+        phone: user.phone || null
       }
     });
   } catch (error) {

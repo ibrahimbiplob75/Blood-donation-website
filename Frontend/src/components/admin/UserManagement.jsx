@@ -16,6 +16,9 @@ const UserManagement = () => {
     role: "",
     bloodGroup: "",
     district: "",
+    address: "",
+    course: "",
+    batchNo: "",
     lastDonateDate: "",
     bloodGiven: 0,
     bloodTaken: 0,
@@ -121,6 +124,8 @@ const UserManagement = () => {
   const filteredUsers = users.filter(
     (user) =>
       (user.name || "").toLowerCase().includes(search.toLowerCase()) ||
+      (user.phone || "").toLowerCase().includes(search.toLowerCase()) ||
+      (user.course || "").toLowerCase().includes(search.toLowerCase()) ||
       (user.email || "").toLowerCase().includes(search.toLowerCase()) ||
       (user.district || "").toLowerCase().includes(search.toLowerCase())
   );
@@ -246,6 +251,9 @@ const UserManagement = () => {
       role: user.role || "",
       bloodGroup: user.bloodGroup || "",
       district: user.district || "",
+      address: user.address || "",
+      course: user.course || "",
+      batchNo: user.batchNo || "",
       lastDonateDate: user.lastDonateDate ? new Date(user.lastDonateDate).toISOString().split('T')[0] : "",
       bloodGiven: user.bloodGiven || 0,
       bloodTaken: user.bloodTaken || 0,
@@ -299,6 +307,9 @@ const UserManagement = () => {
       role: "",
       bloodGroup: "",
       district: "",
+      address: "",
+      course: "",
+      batchNo: "",
       lastDonateDate: "",
       bloodGiven: 0,
       bloodTaken: 0,
@@ -316,6 +327,9 @@ const UserManagement = () => {
       role: "",
       bloodGroup: "",
       district: "",
+      address: "",
+      course: "",
+      batchNo: "",
       lastDonateDate: "",
       bloodGiven: 0,
       bloodTaken: 0,
@@ -443,6 +457,52 @@ const UserManagement = () => {
                   </select>
                 </div>
 
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Address
+                  </label>
+                  <textarea
+                    name="address"
+                    placeholder="Enter full address"
+                    value={formData.address}
+                    onChange={handleChange}
+                    rows="2"
+                    className="border px-3 py-2 rounded w-full focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Course
+                  </label>
+                  <select
+                    name="course"
+                    value={formData.course}
+                    onChange={handleChange}
+                    className="border px-3 py-2 rounded w-full bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select Course</option>
+                    <option value="MBBS">MBBS</option>
+                    <option value="BDS">BDS</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Batch No
+                  </label>
+                  <input
+                    name="batchNo"
+                    type="number"
+                    min="10"
+                    max="99"
+                    placeholder="10-99"
+                    value={formData.batchNo}
+                    onChange={handleChange}
+                    className="border px-3 py-2 rounded w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Last Donation Date
@@ -557,24 +617,36 @@ const UserManagement = () => {
       <div className="mb-4">
         <input
           type="text"
-          placeholder="Search by name, email, or district..."
+          placeholder="Search by name, phone, course, email, or district..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="border border-gray-300 rounded px-4 py-2 w-96 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="border border-gray-300 rounded px-4 py-2 w-full md:w-96 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
+        <p className="text-sm text-gray-500 mt-2">
+          Found {filteredUsers.length} of {users.length} users
+        </p>
       </div>
 
       <div className="overflow-x-auto shadow-md rounded-lg">
         <table className="min-w-full bg-white border border-gray-200">
           <thead className="bg-gray-100 text-gray-700">
             <tr>
-              <th className="px-6 py-3 text-left font-semibold">Name</th>
-              <th className="px-6 py-3 text-left font-semibold">Phone</th>
-              <th className="px-6 py-3 text-left font-semibold">Email</th>
-              <th className="px-6 py-3 text-left font-semibold">Role</th>
-              <th className="px-6 py-3 text-left font-semibold">Blood Group</th>
-              <th className="px-6 py-3 text-left font-semibold">District</th>
-              <th className="px-6 py-3 text-left font-semibold">Actions</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm">Name</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm">Phone</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm">Email</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm">Role</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm">Blood Group</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm">District</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm">Address</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm">Course</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm">Batch No</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm">Last Donate</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm">Blood Given</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm">Blood Taken</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm">Status</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm">Verified</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm">Joined Date</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm sticky right-0 bg-gray-100">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -583,26 +655,85 @@ const UserManagement = () => {
                 key={user._id}
                 className="border-t border-gray-200 hover:bg-gray-50 transition"
               >
-                <td className="px-6 py-4">{user.name || user.Name}</td>
-                <td className="px-6 py-4">{user.phone || "-"}</td>
-                <td className="px-6 py-4">{user.email}</td>
-                <td className="px-6 py-4">
-                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">
+                <td className="px-4 py-4 text-sm font-medium">{user.name || user.Name}</td>
+                <td className="px-4 py-4 text-sm">{user.phone || "-"}</td>
+                <td className="px-4 py-4 text-sm">{user.email}</td>
+                <td className="px-4 py-4">
+                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
                     {user.role}
                   </span>
                 </td>
-                <td className="px-6 py-4">{user.bloodGroup || "-"}</td>
-                <td className="px-6 py-4">{user.district || "-"}</td>
-                <td className="px-6 py-4 space-x-2 flex">
+                <td className="px-4 py-4 text-sm">
+                  <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-medium">
+                    {user.bloodGroup || "-"}
+                  </span>
+                </td>
+                <td className="px-4 py-4 text-sm">{user.district || "-"}</td>
+                <td className="px-4 py-4 text-sm max-w-xs truncate" title={user.address || "-"}>
+                  {user.address || "-"}
+                </td>
+                <td className="px-4 py-4 text-sm">
+                  {user.course ? (
+                    <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-medium">
+                      {user.course}
+                    </span>
+                  ) : (
+                    "-"
+                  )}
+                </td>
+                <td className="px-4 py-4 text-sm text-center">{user.batchNo || "-"}</td>
+                <td className="px-4 py-4 text-sm">
+                  {user.lastDonateDate
+                    ? new Date(user.lastDonateDate).toLocaleDateString()
+                    : "-"}
+                </td>
+                <td className="px-4 py-4 text-sm text-center">
+                  <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-bold">
+                    {user.bloodGiven || 0}
+                  </span>
+                </td>
+                <td className="px-4 py-4 text-sm text-center">
+                  <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs font-bold">
+                    {user.bloodTaken || 0}
+                  </span>
+                </td>
+                <td className="px-4 py-4 text-sm">
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-medium ${
+                      user.isActive
+                        ? "bg-green-100 text-green-800"
+                        : "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {user.isActive ? "Active" : "Inactive"}
+                  </span>
+                </td>
+                <td className="px-4 py-4 text-sm">
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-medium ${
+                      user.isVerified
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-yellow-100 text-yellow-800"
+                    }`}
+                  >
+                    {user.isVerified ? "✓ Verified" : "Pending"}
+                  </span>
+                </td>
+                <td className="px-4 py-4 text-sm">
+                  {user.createdAt
+                    ? new Date(user.createdAt).toLocaleDateString()
+                    : "-"}
+                </td>
+                <td className="px-4 py-4 space-x-2 flex sticky right-0 bg-white">
                   <button
                     onClick={() => handleEdit(user)}
-                    className="bg-yellow-500 text-white px-4 py-1 rounded hover:bg-yellow-600 transition text-sm"
+                    className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 transition text-xs font-medium"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => handleDelete(user._id)}
-                    className="bg-red-500 text-white px-4 py-1 rounded hover:bg-red-600 transition text-sm"
+                    className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition text-xs font-medium"
                   >
                     Delete
                   </button>
@@ -611,8 +742,8 @@ const UserManagement = () => {
             ))}
             {filteredUsers.length === 0 && (
               <tr>
-                <td colSpan="7" className="px-6 py-8 text-center text-gray-500">
-                  No users found.
+                <td colSpan="16" className="px-6 py-8 text-center text-gray-500">
+                  No users found. {search && `Try a different search term.`}
                 </td>
               </tr>
             )}

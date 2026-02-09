@@ -21,8 +21,6 @@ function setupMiddleware(app) {
     origin: [
       'https://rmcrotaract.org',
       'https://www.rmcrotaract.org',
-      // 'https://blood-management-rmc.web.app',
-      // 'https://blood-management-rmc.firebaseapp.com',
       // 'http://localhost:5173',
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

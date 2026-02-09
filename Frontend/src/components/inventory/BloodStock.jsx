@@ -19,21 +19,42 @@ import {
   ChevronRight,
   Edit,
   Trash2,
+  Check,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { baseURL } from "../../Hooks/useAxios.js";
+
 
 const BloodStock = () => {
   const [stockData, setStockData] = useState({});
   const [transactions, setTransactions] = useState([]);
   const [filteredTransactions, setFilteredTransactions] = useState([]);
+  const [donationHistory, setDonationHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [editingTransaction, setEditingTransaction] = useState(null);
+  const [showBloodUsageModal, setShowBloodUsageModal] = useState(false);
+  const [selectedDonation, setSelectedDonation] = useState(null);
+  const [userDirectory, setUserDirectory] = useState([]);
+  const [phoneSuggestions, setPhoneSuggestions] = useState([]);
+  const [matchedUser, setMatchedUser] = useState(null);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [availableBloodBags, setAvailableBloodBags] = useState([]);
+  const [loadingBags, setLoadingBags] = useState(false);
+  const [bloodUsageForm, setBloodUsageForm] = useState({
+    status: "available",
+    usedDate: "",
+    usedBy: "",
+    patientName: "",
+    hospital: "",
+    notes: ""
+  });
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
+  const [donationPage, setDonationPage] = useState(1);
+  const donationItemsPerPage = 20;
 
   // Filters
   const [filters, setFilters] = useState({
@@ -50,6 +71,8 @@ const BloodStock = () => {
     donorName: "",
     donorPhone: "",
     donorAddress: "",
+    bloodBagNumber: "",
+    selectedBloodBag: "",
     receiverName: "",
     receiverPhone: "",
     hospitalName: "",
@@ -65,11 +88,25 @@ const BloodStock = () => {
   useEffect(() => {
     fetchStockData();
     fetchTransactions();
+    fetchDonationHistory();
   }, []);
+
+  useEffect(() => {
+    if (
+      (activeTab === "entry" || activeTab === "overview") &&
+      userDirectory.length === 0
+    ) {
+      fetchUserDirectory();
+    }
+  }, [activeTab, userDirectory.length]);
 
   useEffect(() => {
     applyFilters();
   }, [transactions, filters, currentPage]);
+
+  useEffect(() => {
+    setDonationPage(1);
+  }, [donationHistory.length]);
 
   const fetchStockData = async () => {
     try {
@@ -106,6 +143,64 @@ const BloodStock = () => {
       }
     } catch (error) {
       console.error("Error fetching transactions:", error);
+    }
+  };
+
+  const fetchDonationHistory = async () => {
+    try {
+      const response = await fetch(
+        `${baseURL}/admin/donation-history-list`,
+        {
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setDonationHistory(data.history || []);
+      }
+    } catch (error) {
+      console.error("Error fetching donation history:", error);
+    }
+  };
+
+  const normalizePhone = (phone) => String(phone || "").replace(/\D/g, "");
+
+  const normalizeId = (value) => {
+    if (!value) return "";
+    if (typeof value === "object" && value.$oid) return value.$oid;
+    return String(value);
+  };
+
+  const getUserById = (id) => {
+    const normalizedId = normalizeId(id);
+    return userDirectory.find((u) => normalizeId(u._id) === normalizedId);
+  };
+
+  const fetchUserDirectory = async () => {
+    try {
+      setLoadingUsers(true);
+      const response = await fetch(`${baseURL}/users`, {
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const normalized = Array.isArray(data)
+          ? data.map((u) => ({
+              ...u,
+              name: u.Name || u.name || "",
+              phone: u.phone || "",
+            }))
+          : [];
+        setUserDirectory(normalized);
+      }
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    } finally {
+      setLoadingUsers(false);
     }
   };
 
@@ -179,11 +274,58 @@ const BloodStock = () => {
   };
 
   const handleInputChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+    
+    // Fetch available blood bags when blood group changes in donate tab
+    if (name === "bloodGroup" && activeTab === "donate") {
+      fetchAvailableBloodBags(value);
+    }
+  };
+
+  const handleDonorPhoneChange = (e) => {
+    const value = e.target.value;
+    const normalizedInput = normalizePhone(value);
+
+    const matches = userDirectory.filter((u) =>
+      normalizePhone(u.phone).includes(normalizedInput)
+    );
+
+    setPhoneSuggestions(
+      normalizedInput.length >= 3 ? matches.slice(0, 8) : []
+    );
+
+    const exactMatch = userDirectory.find(
+      (u) => normalizePhone(u.phone) === normalizedInput
+    );
+
+    setMatchedUser(exactMatch || null);
+
+    setFormData((prev) => {
+      const next = { ...prev, donorPhone: value };
+      if (exactMatch) {
+        next.donorName = exactMatch.Name || exactMatch.name || "";
+        if (exactMatch.bloodGroup) {
+          next.bloodGroup = exactMatch.bloodGroup;
+        }
+      } else if (matchedUser) {
+        next.donorName = "";
+      }
+      return next;
+    });
   };
 
   const handleEntryBlood = async (e) => {
     e.preventDefault();
+
+    if (!formData.bloodBagNumber || formData.bloodBagNumber.trim() === "") {
+      Swal.fire({
+        icon: "error",
+        title: "Blood Bag Number Required",
+        text: "Please enter a blood bag number",
+      });
+      return;
+    }
 
     const result = await Swal.fire({
       title: "Confirm Blood Entry",
@@ -193,6 +335,7 @@ const BloodStock = () => {
           <p><strong>Units:</strong> ${formData.units}</p>
           <p><strong>Donor:</strong> ${formData.donorName}</p>
           <p><strong>Phone:</strong> ${formData.donorPhone}</p>
+          <p><strong>Blood Bag #:</strong> ${formData.bloodBagNumber}</p>
         </div>
       `,
       icon: "question",
@@ -204,6 +347,36 @@ const BloodStock = () => {
     if (!result.isConfirmed) return;
 
     try {
+      // First, check if donor phone matches a registered user
+      let userId = null;
+      let isRegisteredUser = false;
+      let matchedUserData = matchedUser;
+
+      if (!matchedUserData) {
+        const userCheckResponse = await fetch(
+          `${baseURL}/admin/check-user-by-phone`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              phone: formData.donorPhone,
+            }),
+          }
+        );
+
+        if (userCheckResponse.ok) {
+          const userData = await userCheckResponse.json();
+          matchedUserData = userData.user || null;
+        }
+      }
+
+      if (matchedUserData) {
+        userId = matchedUserData._id;
+        isRegisteredUser = true;
+      }
+
+      // Add blood to stock
       const response = await fetch(`${baseURL}/admin/blood-entry`, {
         method: "POST",
         credentials: "include",
@@ -214,6 +387,7 @@ const BloodStock = () => {
           donorName: formData.donorName,
           donorPhone: formData.donorPhone,
           donorAddress: formData.donorAddress,
+          bloodBagNumber: formData.bloodBagNumber.trim(),
           notes: formData.notes,
         }),
       });
@@ -221,14 +395,57 @@ const BloodStock = () => {
       const data = await response.json();
 
       if (response.ok) {
+        // Create donation history
+        const historyResponse = await fetch(
+          `${baseURL}/admin/donation-history`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              donorName: formData.donorName,
+              donorPhone: formData.donorPhone,
+              donorAddress: formData.donorAddress,
+              bloodGroup: formData.bloodGroup,
+              units: parseInt(formData.units),
+              bloodBagNumber: formData.bloodBagNumber.trim(),
+              userId: isRegisteredUser ? userId : null,
+              isRegisteredUser: isRegisteredUser,
+              notes: formData.notes,
+            }),
+          }
+        );
+
+        const historyData = await historyResponse.json();
+
+        const userStatus = isRegisteredUser
+          ? "Registered User"
+          : "Unregistered User";
+
         Swal.fire({
           icon: "success",
           title: "Blood Entry Successful",
           html: `
             <p>${formData.units} unit(s) of ${formData.bloodGroup} added</p>
-            <p class="text-sm text-gray-600 mt-2">New Stock: ${data.newStock} units</p>
+            <p class="text-sm text-gray-600 mt-2">Bag #: ${formData.bloodBagNumber}</p>
+            <p class="text-sm text-gray-600">New Stock: ${data.newStock} units</p>
+            <p class="text-sm text-blue-600 mt-2">📋 Donation History: ${userStatus}</p>
           `,
         });
+
+        // Update matched user's donation stats
+        if (isRegisteredUser && userId) {
+          const currentGiven = Number(matchedUserData?.bloodGiven || 0);
+          await fetch(`${baseURL}/users/${userId}`, {
+            method: "PUT",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              bloodGiven: currentGiven + parseInt(formData.units),
+              lastDonateDate: new Date().toISOString().split("T")[0],
+            }),
+          });
+        }
 
         fetchStockData();
         fetchTransactions();
@@ -246,6 +463,39 @@ const BloodStock = () => {
         title: "Error",
         text: "Failed to connect to server",
       });
+      console.error("Error:", error);
+    }
+  };
+
+  const fetchAvailableBloodBags = async (bloodGroup) => {
+    try {
+      setLoadingBags(true);
+      console.log(`Fetching bags for blood group: ${bloodGroup}`);
+      const response = await fetch(
+        `${baseURL}/admin/available-blood-bags?bloodGroup=${encodeURIComponent(bloodGroup)}`,
+        {
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`Fetched bags for ${bloodGroup}:`, data.bags);
+        setAvailableBloodBags(data.bags || []);
+        if (data.bags && data.bags.length === 0) {
+          console.warn(`No bags found for blood group ${bloodGroup}`);
+        }
+      } else {
+        const errorData = await response.json();
+        console.error("Error fetching bags:", errorData);
+        setAvailableBloodBags([]);
+      }
+    } catch (error) {
+      console.error("Error fetching blood bags:", error);
+      setAvailableBloodBags([]);
+    } finally {
+      setLoadingBags(false);
     }
   };
 
@@ -262,12 +512,26 @@ const BloodStock = () => {
       return;
     }
 
+    if (formData.selectedBloodBag === "") {
+      Swal.fire({
+        icon: "error",
+        title: "Blood Bag Required",
+        text: "Please select a blood bag to donate",
+      });
+      return;
+    }
+
+    const selectedBag = availableBloodBags.find(
+      (bag) => bag._id === formData.selectedBloodBag
+    );
+
     const result = await Swal.fire({
       title: "Confirm Blood Donation",
       html: `
         <div class="text-left space-y-2">
           <p><strong>Blood Group:</strong> ${formData.bloodGroup}</p>
           <p><strong>Units:</strong> ${formData.units}</p>
+          <p><strong>Bag Number:</strong> <span class="badge badge-primary">${selectedBag?.bloodBagNumber || "N/A"}</span></p>
           <p><strong>Receiver:</strong> ${formData.receiverName}</p>
           <p><strong>Hospital:</strong> ${formData.hospitalName}</p>
           ${
@@ -298,6 +562,8 @@ const BloodStock = () => {
           patientId: formData.patientId,
           neededDate: formData.neededDate,
           hospitalName: formData.hospitalName,
+          bloodBagId: formData.selectedBloodBag,
+          bloodBagNumber: selectedBag?.bloodBagNumber,
           notes: formData.notes,
         }),
       });
@@ -305,18 +571,50 @@ const BloodStock = () => {
       const data = await response.json();
 
       if (response.ok) {
+        // Mark the blood bag as used with patient information
+        if (formData.selectedBloodBag && selectedBag?.bloodBagNumber) {
+          try {
+            await fetch(
+              `${baseURL}/admin/mark-blood-as-used`,
+              {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  bloodBagNumber: selectedBag.bloodBagNumber,
+                  patientName: formData.receiverName,
+                  patientId: formData.patientId,
+                  hospitalName: formData.hospitalName,
+                  doctorName: "Admin",
+                  dateUsed: new Date().toISOString(),
+                  usedBy: "Admin",
+                  notes: formData.notes || `Donated to ${formData.hospitalName}`
+                })
+              }
+            );
+            console.log("Blood marked as used successfully");
+          } catch (error) {
+            console.error("Error marking bag as used:", error);
+          }
+        }
+
         Swal.fire({
           icon: "success",
           title: "Blood Donated Successfully",
           html: `
             <p>${formData.units} unit(s) of ${formData.bloodGroup} donated</p>
+            <p class="text-sm text-gray-600">Bag: ${selectedBag?.bloodBagNumber}</p>
+            <p class="text-sm text-gray-600 mt-2">Patient: ${formData.receiverName}</p>
+            <p class="text-sm text-gray-600">Hospital: ${formData.hospitalName}</p>
             <p class="text-sm text-gray-600 mt-2">Remaining Stock: ${data.remainingStock} units</p>
           `,
         });
 
         fetchStockData();
         fetchTransactions();
+        fetchDonationHistory();
         resetForm();
+        setAvailableBloodBags([]);
       } else {
         Swal.fire({
           icon: "error",
@@ -429,6 +727,7 @@ const BloodStock = () => {
       donorName: "",
       donorPhone: "",
       donorAddress: "",
+      bloodBagNumber: "",
       receiverName: "",
       receiverPhone: "",
       hospitalName: "",
@@ -437,7 +736,93 @@ const BloodStock = () => {
       notes: "",
       fromBloodGroup: "A+",
       toBloodGroup: "B+",
+      selectedBloodBag: "",
     });
+    setAvailableBloodBags([]);
+    setMatchedUser(null);
+    setPhoneSuggestions([]);
+  };
+
+  const openBloodUsageModal = (donation) => {
+    setSelectedDonation(donation);
+    setBloodUsageForm({
+      status: donation.status || "available",
+      usedDate: "",
+      usedBy: "",
+      patientName: "",
+      hospital: "",
+      notes: donation.notes || ""
+    });
+    setShowBloodUsageModal(true);
+  };
+
+  const handleBloodUsageChange = (e) => {
+    const { name, value } = e.target;
+    setBloodUsageForm({ ...bloodUsageForm, [name]: value });
+  };
+
+  const handleUpdateBloodUsage = async () => {
+    if (!selectedDonation) return;
+
+    if (
+      bloodUsageForm.status === "used" &&
+      (!bloodUsageForm.usedDate || !bloodUsageForm.usedBy)
+    ) {
+      Swal.fire({
+        icon: "error",
+        title: "Required Fields",
+        text: "Please fill in Used Date and Used By when marking as Used"
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${baseURL}/admin/donation-status/${selectedDonation._id}`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: bloodUsageForm.status,
+            usedDate: bloodUsageForm.usedDate || null,
+            usedBy: bloodUsageForm.usedBy || "",
+            patientName: bloodUsageForm.patientName || "",
+            hospital: bloodUsageForm.hospital || "",
+            notes: bloodUsageForm.notes || ""
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        Swal.fire({
+          icon: "success",
+          title: "Status Updated",
+          html: `
+            <p>Blood Bag: ${selectedDonation.bloodBagNumber}</p>
+            <p>Blood Group: ${selectedDonation.bloodGroup}</p>
+            <p>Status: <strong>${bloodUsageForm.status === "used" ? "Used" : "Available"}</strong></p>
+          `
+        });
+        setShowBloodUsageModal(false);
+        fetchDonationHistory();
+      } else {
+        Swal.fire({
+          icon: "error",
+          title: "Update Failed",
+          text: data.message || "Failed to update blood status"
+        });
+      }
+    } catch (error) {
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "Failed to connect to server"
+      });
+      console.error("Error:", error);
+    }
   };
 
   const handleEditTransaction = async (transaction) => {
@@ -705,6 +1090,14 @@ const BloodStock = () => {
     currentPage * itemsPerPage
   );
 
+  const donationTotalPages = Math.ceil(
+    donationHistory.length / donationItemsPerPage
+  );
+  const paginatedDonationHistory = donationHistory.slice(
+    (donationPage - 1) * donationItemsPerPage,
+    donationPage * donationItemsPerPage
+  );
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -772,7 +1165,7 @@ const BloodStock = () => {
           <Minus size={16} className="mr-2" />
           Donate Blood
         </button>
-        <button
+        {/* <button
           className={`tab whitespace-nowrap ${
             activeTab === "exchange" ? "tab-active" : ""
           }`}
@@ -780,7 +1173,7 @@ const BloodStock = () => {
         >
           <ArrowRightLeft size={16} className="mr-2" />
           Exchange Blood
-        </button>
+        </button> */}
         <button
           className={`tab whitespace-nowrap ${
             activeTab === "history" ? "tab-active" : ""
@@ -877,6 +1270,245 @@ const BloodStock = () => {
               </div>
             </div>
           </div>
+
+          {/* Donation History with Bag Numbers */}
+          <div className="mt-8 bg-white rounded-xl shadow-lg overflow-hidden">
+            <div className="p-4 md:p-6 border-b bg-gradient-to-r from-blue-50 to-purple-50">
+              <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2">
+                <Activity className="text-blue-600" size={28} />
+                Recent Blood Donations with Bag Numbers
+              </h2>
+              <p className="text-sm text-gray-600 mt-2">
+                Latest donations showing blood bag numbers and donor status
+              </p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="table w-full">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="text-xs md:text-sm">Donor Info</th>
+                    <th className="text-xs md:text-sm">Blood Type & Units</th>
+                    <th className="text-xs md:text-sm">Bag Number</th>
+                    <th className="text-xs md:text-sm">Status & Expiry</th>
+                    <th className="text-xs md:text-sm">Usage Info</th>
+                    <th className="text-xs md:text-sm">Date</th>
+                    <th className="text-xs md:text-sm">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {donationHistory.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="text-center py-6 text-gray-500">
+                        No donation history found
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedDonationHistory.map((donation, index) => {
+                      // Calculate bag expiry date (15 days from donation date)
+                      const donationDate = donation.donationDate ? new Date(donation.donationDate) : null;
+                      const expiryDate = donationDate ? new Date(donationDate.getTime() + 15 * 24 * 60 * 60 * 1000) : null;
+                      const today = new Date();
+                      const daysUntilExpiry = expiryDate ? Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24)) : null;
+                      const patientFromDirectory = donation.usedFor?.patientId
+                        ? getUserById(donation.usedFor.patientId)
+                        : null;
+                      const patientDisplayName =
+                        donation.usedFor?.patientName || patientFromDirectory?.name || "";
+                      const patientDisplayPhone =
+                        patientFromDirectory?.phone || "";
+                      const donorFromDirectory = donation.userId
+                        ? getUserById(donation.userId)
+                        : null;
+                      const donorDisplayName =
+                        donation.donorName || donorFromDirectory?.name || "N/A";
+                      const donorDisplayPhone =
+                        donation.donorPhone || donorFromDirectory?.phone || "";
+                      
+                      // Determine expiry status
+                      let expiryStatus = "valid";
+                      let expiryBadgeClass = "badge-success";
+                      if (daysUntilExpiry !== null) {
+                        if (daysUntilExpiry < 0) {
+                          expiryStatus = "expired";
+                          expiryBadgeClass = "badge-error";
+                        } else if (daysUntilExpiry <= 3) {
+                          expiryStatus = "expiring";
+                          expiryBadgeClass = "badge-warning";
+                        }
+                      }
+
+                      return (
+                        <tr key={donation._id || index} className={expiryStatus === "expired" ? "bg-red-50" : expiryStatus === "expiring" ? "bg-yellow-50" : "hover"}>
+                          {/* Donor Info */}
+                          <td>
+                            <div className="flex flex-col space-y-1">
+                              <span className="font-semibold text-gray-800 text-sm">
+                                {donorDisplayName}
+                              </span>
+                              {donorDisplayPhone && (
+                                <span className="text-xs text-gray-600">
+                                  {donorDisplayPhone}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          
+                          {/* Blood Type & Units */}
+                          <td>
+                            <div className="flex flex-col items-start gap-1">
+                              <span className="badge badge-error text-sm font-bold">
+                                {donation.bloodGroup}
+                              </span>
+                              <span className="text-xs font-semibold text-gray-700">
+                                {donation.units} {donation.units > 1 ? 'units' : 'unit'}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Bag Number */}
+                          <td>
+                            <div className="flex flex-col gap-1">
+                              <span className="badge badge-primary text-xs font-semibold">
+                                {donation.bloodBagNumber || "N/A"}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {formatDate(donation.donationDate)}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Status & Expiry */}
+                          <td>
+                            <div className="flex flex-col gap-1">
+                              <span
+                                className={`badge text-xs font-semibold ${
+                                  donation.bloodUsed
+                                    ? "badge-error"
+                                    : "badge-info"
+                                }`}
+                              >
+                                {donation.bloodUsed ? "✓ Used" : "○ Available"}
+                              </span>
+                              {!donation.bloodUsed && (
+                                <>
+                                  <span className={`badge text-xs ${expiryBadgeClass}`}>
+                                    {expiryStatus === "expired" ? "✗ Expired" : expiryStatus === "expiring" ? "⚠ Expiring" : "✓ Valid"}
+                                  </span>
+                                  {daysUntilExpiry !== null && (
+                                    <span className={`text-xs font-semibold ${daysUntilExpiry < 0 ? "text-red-600" : daysUntilExpiry <= 3 ? "text-orange-600" : "text-green-600"}`}>
+                                      {daysUntilExpiry < 0 ? `${Math.abs(daysUntilExpiry)}d ago` : `${daysUntilExpiry}d left`}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Usage Info - Patient/Hospital/Reason */}
+                          <td>
+                            {donation.bloodUsed && (patientDisplayName || donation.usedFor?.patientName) ? (
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1">
+                                  <User size={12} className="text-gray-500" />
+                                  <span className="font-semibold text-xs text-gray-800">
+                                    {patientDisplayName}
+                                  </span>
+                                </div>
+                                {patientDisplayPhone && (
+                                  <p className="text-xs text-gray-600">{patientDisplayPhone}</p>
+                                )}
+                                {donation.usedFor?.patientId && (
+                                  <p className="text-xs text-gray-600">ID: {donation.usedFor.patientId}</p>
+                                )}
+                                {(donation.usedFor?.hospitalName || donation.hospitalName) && (
+                                  <div className="flex items-center gap-1">
+                                    <Hospital size={12} className="text-gray-500" />
+                                    <span className="text-xs text-gray-600">
+                                      {donation.usedFor?.hospitalName || donation.hospitalName}
+                                    </span>
+                                  </div>
+                                )}
+                                {donation.usedFor?.dateUsed && (
+                                  <p className="text-xs text-gray-500">
+                                    {new Date(donation.usedFor.dateUsed).toLocaleDateString()}
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-400 italic">Not used yet</span>
+                            )}
+                          </td>
+
+                          {/* Date */}
+                          <td className="text-xs text-gray-600">
+                            {donation.donationDate
+                              ? new Date(donation.donationDate).toLocaleDateString()
+                              : "N/A"}
+                          </td>
+
+                          {/* Actions */}
+                          <td>
+                            <button
+                              onClick={() => openBloodUsageModal(donation)}
+                              className="btn btn-xs btn-outline btn-primary"
+                              title="Update Blood Usage Status"
+                            >
+                              <Edit size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="p-4 border-t flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-sm text-gray-600">
+              <div>
+                Showing {paginatedDonationHistory.length} of {donationHistory.length} donations
+              </div>
+
+              {donationTotalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setDonationPage((prev) => Math.max(1, prev - 1))}
+                    disabled={donationPage === 1}
+                    className="btn btn-sm btn-outline"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+
+                  <div className="flex gap-1">
+                    {[...Array(donationTotalPages)].map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setDonationPage(i + 1)}
+                        className={`btn btn-sm ${
+                          donationPage === i + 1 ? "btn-active" : "btn-outline"
+                        }`}
+                      >
+                        {i + 1}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      setDonationPage((prev) =>
+                        Math.min(donationTotalPages, prev + 1)
+                      )
+                    }
+                    disabled={donationPage === donationTotalPages}
+                    className="btn btn-sm btn-outline"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </motion.div>
       )}
 
@@ -894,6 +1526,50 @@ const BloodStock = () => {
 
           <form onSubmit={handleEntryBlood} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text font-semibold">
+                    Donor Phone *
+                  </span>
+                </label>
+                <input
+                  type="tel"
+                  name="donorPhone"
+                  value={formData.donorPhone}
+                  onChange={handleDonorPhoneChange}
+                  list="donor-phone-suggestions"
+                  className="input input-bordered w-full"
+                  required
+                />
+                <datalist id="donor-phone-suggestions">
+                  {phoneSuggestions.map((u) => (
+                    <option key={u._id} value={u.phone}>
+                      {u.phone} - {u.Name || u.name || ""}
+                    </option>
+                  ))}
+                </datalist>
+                <div className="mt-1 text-xs">
+                  {loadingUsers && (
+                    <span className="text-gray-500">Loading users...</span>
+                  )}
+                  {!loadingUsers && matchedUser && (
+                    <span className="text-green-600 font-semibold">
+                      Matched: {matchedUser.Name || matchedUser.name || ""}
+                      {matchedUser.bloodGroup
+                        ? ` • ${matchedUser.bloodGroup}`
+                        : ""}
+                    </span>
+                  )}
+                  {!loadingUsers &&
+                    !matchedUser &&
+                    normalizePhone(formData.donorPhone).length >= 10 && (
+                      <span className="text-orange-600">
+                        No user found. Entry will be saved as new donor.
+                      </span>
+                    )}
+                </div>
+              </div>
+
               <div className="form-control">
                 <label className="label">
                   <span className="label-text font-semibold">
@@ -947,14 +1623,15 @@ const BloodStock = () => {
               <div className="form-control">
                 <label className="label">
                   <span className="label-text font-semibold">
-                    Donor Phone *
+                    Blood Bag Number *
                   </span>
                 </label>
                 <input
-                  type="tel"
-                  name="donorPhone"
-                  value={formData.donorPhone}
+                  type="text"
+                  name="bloodBagNumber"
+                  value={formData.bloodBagNumber}
                   onChange={handleInputChange}
+                  placeholder="e.g., BAG-2024-001"
                   className="input input-bordered w-full"
                   required
                 />
@@ -1042,6 +1719,44 @@ const BloodStock = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Blood Bag Selector */}
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text font-semibold">
+                    Select Blood Bag *
+                  </span>
+                </label>
+                {loadingBags ? (
+                  <div className="select select-bordered w-full flex items-center justify-center">
+                    <span className="loading loading-spinner loading-sm"></span>
+                    Loading bags...
+                  </div>
+                ) : availableBloodBags.length > 0 ? (
+                  <select
+                    name="selectedBloodBag"
+                    value={formData.selectedBloodBag}
+                    onChange={handleInputChange}
+                    className="select select-bordered w-full"
+                    required
+                  >
+                    <option value="">-- Select a blood bag --</option>
+                    {availableBloodBags.map((bag) => (
+                      <option key={bag._id} value={bag._id}>
+                        {bag.bloodBagNumber} - {bag.donorName} ({bag.units} units)
+                      </option>
+                    ))}
+                  </select>
+                ) : formData.bloodGroup ? (
+                  <div className="alert alert-warning">
+                    <span>No available blood bags for {formData.bloodGroup}</span>
+                  </div>
+                ) : (
+                  <div className="select select-bordered w-full text-gray-500">
+                    Select blood group first
+                  </div>
+                )}
               </div>
 
               <div className="form-control">
@@ -1590,8 +2305,163 @@ const BloodStock = () => {
           )}
         </motion.div>
       )}
+
+      {/* Blood Usage Update Modal */}
+      {showBloodUsageModal && selectedDonation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 p-6"
+          >
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <Activity className="text-blue-600" size={24} />
+              Update Blood Usage Status
+            </h2>
+
+            <div className="space-y-4 mb-6">
+              {/* Display Info */}
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <p className="text-sm">
+                  <strong>Blood Group:</strong>{" "}
+                  <span className="badge badge-outline">
+                    {selectedDonation.bloodGroup}
+                  </span>
+                </p>
+                <p className="text-sm mt-2">
+                  <strong>Bag Number:</strong>{" "}
+                  <span className="badge badge-primary">
+                    {selectedDonation.bloodBagNumber}
+                  </span>
+                </p>
+                <p className="text-sm mt-2">
+                  <strong>Donor:</strong> {selectedDonation.donorName} (
+                  {selectedDonation.donorPhone})
+                </p>
+              </div>
+
+              {/* Status Selection */}
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text font-semibold">
+                    Blood Status *
+                  </span>
+                </label>
+                <select
+                  name="status"
+                  value={bloodUsageForm.status}
+                  onChange={handleBloodUsageChange}
+                  className="select select-bordered"
+                >
+                  <option value="available">Available (Not Used)</option>
+                  <option value="used">Used</option>
+                </select>
+              </div>
+
+              {/* Conditional fields if used */}
+              {bloodUsageForm.status === "used" && (
+                <>
+                  <div className="form-control">
+                    <label className="label">
+                      <span className="label-text font-semibold">
+                        Date Used *
+                      </span>
+                    </label>
+                    <input
+                      type="date"
+                      name="usedDate"
+                      value={bloodUsageForm.usedDate}
+                      onChange={handleBloodUsageChange}
+                      className="input input-bordered"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-control">
+                    <label className="label">
+                      <span className="label-text font-semibold">
+                        Used By (Doctor/Staff) *
+                      </span>
+                    </label>
+                    <input
+                      type="text"
+                      name="usedBy"
+                      value={bloodUsageForm.usedBy}
+                      onChange={handleBloodUsageChange}
+                      placeholder="Doctor or Staff Name"
+                      className="input input-bordered"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-control">
+                    <label className="label">
+                      <span className="label-text">Patient Name</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="patientName"
+                      value={bloodUsageForm.patientName}
+                      onChange={handleBloodUsageChange}
+                      placeholder="Patient Name (Optional)"
+                      className="input input-bordered"
+                    />
+                  </div>
+
+                  <div className="form-control">
+                    <label className="label">
+                      <span className="label-text">Hospital/Facility</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="hospital"
+                      value={bloodUsageForm.hospital}
+                      onChange={handleBloodUsageChange}
+                      placeholder="Hospital Name (Optional)"
+                      className="input input-bordered"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Notes */}
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text">Additional Notes</span>
+                </label>
+                <textarea
+                  name="notes"
+                  value={bloodUsageForm.notes}
+                  onChange={handleBloodUsageChange}
+                  placeholder="Any additional notes..."
+                  className="textarea textarea-bordered"
+                  rows="3"
+                />
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowBloodUsageModal(false)}
+                className="btn btn-outline flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateBloodUsage}
+                className="btn bg-blue-600 hover:bg-blue-700 text-white flex-1"
+              >
+                <Check size={18} />
+                Update Status
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default BloodStock;
+

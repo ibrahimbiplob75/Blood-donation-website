@@ -386,10 +386,9 @@ const UserProfile = () => {
                 <input
                   type="tel"
                   value={editForm.phone}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, phone: e.target.value })
-                  }
-                  className="input input-bordered input-sm w-full mt-1"
+                  disabled
+                  className="input input-bordered input-sm w-full mt-1 bg-gray-100 cursor-not-allowed"
+                  title="Phone number cannot be changed"
                 />
               ) : (
                 <p className="text-lg font-semibold">{profile.phone}</p>

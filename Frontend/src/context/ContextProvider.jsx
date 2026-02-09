@@ -92,6 +92,9 @@ const ContextProvider = ({ children }) => {
           displayName: response.data.user.name || response.data.user.Name,
           uid: response.data.user._id,
           isAdmin: adminRoles.includes(role),
+          bloodGroup: response.data.user.bloodGroup || null,
+          phone: response.data.user.phone || null,
+          Name: response.data.user.Name || response.data.user.name,
         });
         return true;
       } else {
